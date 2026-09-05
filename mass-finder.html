@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Find a Mass — Catholic churches near you</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+
+  :root{
+    --stone:       #EDE7D8;
+    --panel:       #F5F1E6;
+    --line:        #D9CFB8;
+    --ink:         #2A241D;
+    --ink-dim:     #6E6455;
+    --burgundy:    #7A2731;
+    --burgundy-dp: #5C1D24;
+    --gold:        #A9822F;
+    --gold-soft:   #C9AD6C;
+    --good:        #4C6B47;
+  }
+
+  *{ box-sizing:border-box; }
+  html{ scroll-behavior:smooth; }
+
+  body{
+    margin:0; min-height:100vh;
+    background:var(--stone);
+    color:var(--ink);
+    font-family:'Source Sans 3', sans-serif;
+    line-height:1.55;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:0.001ms !important; transition-duration:0.001ms !important; }
+  }
+
+  h1,h2,h3{ font-family:'Fraunces', serif; font-weight:500; margin:0; }
+
+  .wrap{ max-width:640px; margin:0 auto; padding:0 22px 80px; }
+
+  /* ---------- Header ---------- */
+  .topbar{
+    display:flex; align-items:center; gap:10px;
+    padding:26px 22px 6px; max-width:640px; margin:0 auto;
+  }
+  .mark{ width:20px; height:20px; flex:none; color:var(--burgundy); }
+  .topbar span{
+    font-family:'Fraunces', serif; font-size:1rem; letter-spacing:0.01em; color:var(--ink);
+  }
+
+  /* ---------- Hero / search ---------- */
+  .hero{ padding:20px 0 8px; opacity:0; animation:rise 0.5s ease-out 0.05s forwards; }
+  @keyframes rise{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:translateY(0); } }
+
+  .hero h1{ font-size:clamp(1.9rem, 6vw, 2.5rem); line-height:1.12; margin-bottom:10px; }
+  .hero p{ margin:0 0 22px; max-width:46ch; color:var(--ink-dim); font-size:1.02rem; }
+
+  .search-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:6px;
+    padding:20px; margin-bottom:6px;
+  }
+  .search-row{ display:flex; gap:10px; flex-wrap:wrap; }
+  .search-row input[type="text"]{
+    flex:1; min-width:180px; background:#fff; border:1px solid var(--line); color:var(--ink);
+    padding:12px 13px; border-radius:4px; font-family:inherit; font-size:0.95rem;
+  }
+  .search-row input[type="text"]:focus, select:focus, button:focus-visible{
+    outline:2px solid var(--burgundy); outline-offset:1px;
+  }
+  .radius-row{
+    display:flex; align-items:center; gap:10px; margin-top:12px; font-size:0.9rem; color:var(--ink-dim);
+  }
+  .radius-row select{
+    background:#fff; border:1px solid var(--line); color:var(--ink); border-radius:4px;
+    padding:8px 10px; font-family:inherit; font-size:0.9rem;
+  }
+  .btn{
+    appearance:none; background:var(--burgundy); border:1px solid var(--burgundy); color:#fff;
+    font-weight:600; font-size:0.92rem; padding:12px 18px; border-radius:4px; cursor:pointer;
+    font-family:'Source Sans 3',sans-serif; white-space:nowrap;
+  }
+  .btn:hover{ background:var(--burgundy-dp); border-color:var(--burgundy-dp); }
+  .btn:disabled{ opacity:0.5; cursor:not-allowed; }
+  .btn-ghost{
+    appearance:none; background:none; border:1px solid var(--line); color:var(--ink-dim);
+    font-size:0.85rem; padding:9px 14px; border-radius:4px; cursor:pointer; font-family:inherit;
+  }
+  .btn-ghost:hover{ color:var(--ink); border-color:var(--gold); }
+
+  .or-divide{
+    display:flex; align-items:center; gap:10px; margin:14px 0; color:var(--ink-dim); font-size:0.78rem;
+  }
+  .or-divide::before, .or-divide::after{ content:""; flex:1; height:1px; background:var(--line); }
+
+  /* ---------- Rosary-bead divider ---------- */
+  .beads{
+    display:flex; align-items:center; justify-content:center; gap:9px; margin:34px 0 26px;
+  }
+  .beads span{ width:5px; height:5px; border-radius:50%; background:var(--gold-soft); }
+  .beads span:nth-child(5n){ width:7px; height:7px; background:var(--gold); }
+
+  /* ---------- Status / states ---------- */
+  .status{ text-align:center; padding:34px 20px; color:var(--ink-dim); }
+  .status .big{ font-family:'Fraunces',serif; font-size:1.15rem; color:var(--ink); display:block; margin-bottom:8px; }
+  .status a{ color:var(--burgundy); }
+
+  .results-head{
+    display:flex; align-items:baseline; justify-content:space-between; margin:0 0 16px; gap:10px; flex-wrap:wrap;
+  }
+  .results-head h2{ font-size:1.2rem; }
+  .results-head .note{ color:var(--ink-dim); font-size:0.82rem; }
+
+  /* ---------- Parish card ---------- */
+  .parish{
+    border-top:1px solid var(--line); padding:20px 0;
+  }
+  .parish:first-child{ border-top:none; }
+  .parish-head{ display:flex; justify-content:space-between; gap:14px; align-items:baseline; }
+  .parish-head h3{ font-size:1.15rem; }
+  .parish-dist{ color:var(--gold); font-size:0.85rem; white-space:nowrap; font-weight:600; }
+  .parish-addr{ color:var(--ink-dim); font-size:0.88rem; margin-top:3px; }
+
+  .parish-detail{
+    display:grid; grid-template-columns:88px 1fr; gap:5px 12px; margin-top:14px; font-size:0.92rem;
+  }
+  .parish-detail dt{ color:var(--ink-dim); font-size:0.78rem; padding-top:2px; }
+  .parish-detail dd{ margin:0; }
+  .parish-detail dd.muted{ color:var(--ink-dim); font-style:italic; }
+
+  .parish-links{ display:flex; gap:14px; margin-top:14px; font-size:0.88rem; flex-wrap:wrap; }
+  .parish-links a{ color:var(--burgundy); text-decoration:none; border-bottom:1px solid transparent; }
+  .parish-links a:hover{ border-bottom-color:var(--burgundy); }
+
+  footer{
+    margin-top:50px; padding-top:20px; border-top:1px solid var(--line);
+    color:var(--ink-dim); font-size:0.76rem; text-align:center;
+  }
+  footer a{ color:var(--ink-dim); }
+
+  @media (max-width:480px){
+    .parish-detail{ grid-template-columns:74px 1fr; }
+    .search-row{ flex-direction:column; }
+    .btn{ width:100%; }
+  }
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <svg class="mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M6 8h12"/></svg>
+  <span>Find a Mass</span>
+</div>
+
+<div class="wrap">
+
+  <section class="hero">
+    <h1>Find a Mass near you</h1>
+    <p>Search Catholic churches around your location or a city you're visiting, with Mass and Confession times where parishes have listed them.</p>
+
+    <div class="search-card">
+      <div class="search-row">
+        <button class="btn" id="locateBtn" type="button">Use my current location</button>
+      </div>
+      <div class="or-divide">or search a place</div>
+      <div class="search-row">
+        <input type="text" id="placeInput" placeholder="City, ZIP, or address" autocomplete="off">
+        <button class="btn-ghost" id="placeBtn" type="button" style="border-color:var(--burgundy);color:var(--burgundy);">Search</button>
+      </div>
+      <div class="radius-row">
+        <span>Within</span>
+        <select id="radiusSelect">
+          <option value="5">5 miles</option>
+          <option value="10" selected>10 miles</option>
+          <option value="20">20 miles</option>
+          <option value="35">35 miles</option>
+          <option value="50">50 miles</option>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <div class="beads" aria-hidden="true">
+    <span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <div id="output">
+    <div class="status">
+      <span class="big">No search yet</span>
+      Use your location or search a place above to see nearby parishes.
+    </div>
+  </div>
+
+  <footer>
+    Church data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, community-maintained and not affiliated with any diocese.
+    Always confirm times on the parish's own website before traveling, especially around holy days.
+  </footer>
+
+</div>
+
+<script>
+(function(){
+
+  const OVERPASS = 'https://overpass-api.de/api/interpreter';
+  const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
+  const MILES_TO_METERS = 1609.34;
+
+  const output = document.getElementById('output');
+  const locateBtn = document.getElementById('locateBtn');
+  const placeBtn = document.getElementById('placeBtn');
+  const placeInput = document.getElementById('placeInput');
+  const radiusSelect = document.getElementById('radiusSelect');
+
+  function milesBetween(lat1, lon1, lat2, lon2){
+    const R = 3958.8; // earth radius in miles
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  function setStatus(bigText, smallHtml){
+    output.innerHTML = `<div class="status"><span class="big">${bigText}</span>${smallHtml || ''}</div>`;
+  }
+
+  function setLoading(msg){
+    setStatus(msg || 'Searching…', 'Looking up nearby parishes — this can take a few seconds.');
+  }
+
+  // ---------------------------------------------------------------
+  // Geocode a place name via Nominatim (OSM's free geocoder)
+  // ---------------------------------------------------------------
+  async function geocode(query){
+    const url = `${NOMINATIM}?format=json&limit=1&q=${encodeURIComponent(query)}`;
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) throw new Error('geocode failed');
+    const data = await res.json();
+    if (!data.length) return null;
+    return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), label: data[0].display_name };
+  }
+
+  // ---------------------------------------------------------------
+  // Query Overpass for Catholic churches within radius
+  // ---------------------------------------------------------------
+  async function findChurches(lat, lon, radiusMiles){
+    const meters = Math.round(radiusMiles * MILES_TO_METERS);
+    const query = `
+      [out:json][timeout:25];
+      (
+        node["amenity"="place_of_worship"]["religion"="christian"]["denomination"~"^(roman_catholic|catholic)$",i](around:${meters},${lat},${lon});
+        way["amenity"="place_of_worship"]["religion"="christian"]["denomination"~"^(roman_catholic|catholic)$",i](around:${meters},${lat},${lon});
+        node["amenity"="place_of_worship"]["religion"="christian"]["name"~"catholic",i](around:${meters},${lat},${lon});
+        way["amenity"="place_of_worship"]["religion"="christian"]["name"~"catholic",i](around:${meters},${lat},${lon});
+      );
+      out center tags;
+    `;
+    const res = await fetch(OVERPASS, { method: 'POST', body: query });
+    if (!res.ok) throw new Error('overpass failed');
+    const data = await res.json();
+
+    const byId = new Map();
+    (data.elements || []).forEach(el => {
+      const tags = el.tags || {};
+      const elLat = el.lat ?? (el.center && el.center.lat);
+      const elLon = el.lon ?? (el.center && el.center.lon);
+      if (elLat == null || elLon == null || !tags.name) return;
+      const id = el.type + el.id;
+      if (byId.has(id)) return;
+
+      const addrParts = [tags['addr:housenumber'], tags['addr:street']].filter(Boolean).join(' ');
+      const cityLine = [tags['addr:city'], tags['addr:state'], tags['addr:postcode']].filter(Boolean).join(', ');
+      const address = [addrParts, cityLine].filter(Boolean).join(', ') || tags['addr:full'] || null;
+
+      byId.set(id, {
+        name: tags.name,
+        lat: elLat, lon: elLon,
+        address,
+        phone: tags.phone || tags['contact:phone'] || null,
+        website: tags.website || tags['contact:website'] || null,
+        serviceTimes: tags.service_times || null,
+        confession: tags['service_times:confession'] || null,
+        distance: milesBetween(lat, lon, elLat, elLon)
+      });
+    });
+
+    return Array.from(byId.values())
+      .filter(c => c.distance <= radiusMiles + 0.3)
+      .sort((a,b) => a.distance - b.distance);
+  }
+
+  // ---------------------------------------------------------------
+  // Render results
+  // ---------------------------------------------------------------
+  function renderResults(churches, radiusMiles){
+    if (churches.length === 0){
+      setStatus('No parishes found', `No Catholic churches turned up within ${radiusMiles} miles in OpenStreetMap's data. Try a wider radius, or the parish may not be mapped yet.`);
+      return;
+    }
+
+    const head = `
+      <div class="results-head">
+        <h2>${churches.length} ${churches.length === 1 ? 'parish' : 'parishes'} within ${radiusMiles} miles</h2>
+        <span class="note">Sorted by distance</span>
+      </div>
+    `;
+
+    const cards = churches.map(c => {
+      const distLabel = c.distance < 0.1 ? 'here' : `${c.distance.toFixed(1)} mi`;
+      const rows = [];
+
+      rows.push(`
+        <dt>Mass</dt>
+        <dd class="${c.serviceTimes ? '' : 'muted'}">${c.serviceTimes ? formatTimes(c.serviceTimes) : 'Not listed here — check the parish website'}</dd>
+      `);
+      rows.push(`
+        <dt>Confession</dt>
+        <dd class="${c.confession ? '' : 'muted'}">${c.confession ? formatTimes(c.confession) : 'Not listed here — check the parish website'}</dd>
+      `);
+
+      const links = [];
+      if (c.website) links.push(`<a href="${c.website.startsWith('http') ? c.website : 'https://' + c.website}" target="_blank" rel="noopener">Parish website</a>`);
+      if (c.phone) links.push(`<a href="tel:${c.phone.replace(/[^+\d]/g,'')}">${c.phone}</a>`);
+      links.push(`<a href="https://www.openstreetmap.org/?mlat=${c.lat}&mlon=${c.lon}#map=17/${c.lat}/${c.lon}" target="_blank" rel="noopener">Map</a>`);
+
+      return `
+        <div class="parish">
+          <div class="parish-head">
+            <h3>${c.name}</h3>
+            <span class="parish-dist">${distLabel}</span>
+          </div>
+          ${c.address ? `<div class="parish-addr">${c.address}</div>` : ''}
+          <dl class="parish-detail">${rows.join('')}</dl>
+          <div class="parish-links">${links.join('')}</div>
+        </div>
+      `;
+    }).join('');
+
+    output.innerHTML = head + cards;
+  }
+
+  // OSM service_times syntax (e.g. "Su 08:00,10:00,12:00; Sa 16:00-16:45") is
+  // opening_hours-style — display as-is but break on ';' for readability.
+  function formatTimes(raw){
+    return raw.split(';').map(s => s.trim()).filter(Boolean).join(' · ');
+  }
+
+  // ---------------------------------------------------------------
+  // Search flows
+  // ---------------------------------------------------------------
+  async function runSearch(lat, lon, radiusMiles){
+    setLoading();
+    try{
+      const churches = await findChurches(lat, lon, radiusMiles);
+      renderResults(churches, radiusMiles);
+    }catch(e){
+      setStatus('Search failed', 'Could not reach the church directory right now. Please try again in a moment.');
+    }
+  }
+
+  locateBtn.addEventListener('click', () => {
+    if (!navigator.geolocation){
+      setStatus('Location unavailable', 'Your browser doesn\'t support geolocation — try searching a place instead.');
+      return;
+    }
+    setLoading('Getting your location…');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => runSearch(pos.coords.latitude, pos.coords.longitude, Number(radiusSelect.value)),
+      () => setStatus('Location blocked', 'Allow location access in your browser, or search a place instead.')
+    );
+  });
+
+  async function searchPlace(){
+    const q = placeInput.value.trim();
+    if (!q) return;
+    setLoading('Finding that place…');
+    try{
+      const place = await geocode(q);
+      if (!place){
+        setStatus('Place not found', `Couldn't find "${q}" — try a more specific city, ZIP, or address.`);
+        return;
+      }
+      await runSearch(place.lat, place.lon, Number(radiusSelect.value));
+    }catch(e){
+      setStatus('Search failed', 'Could not look up that place right now. Please try again in a moment.');
+    }
+  }
+
+  placeBtn.addEventListener('click', searchPlace);
+  placeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') searchPlace(); });
+
+})();
+</script>
+
+</body>
+</html>
