@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
 
   :root{
@@ -95,6 +96,29 @@
   }
   .or-divide::before, .or-divide::after{ content:""; flex:1; height:1px; background:var(--line); }
 
+  /* ---------- Map ---------- */
+  .map-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:6px;
+    padding:16px; margin-top:14px;
+  }
+  .map-card-head{
+    display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:10px;
+  }
+  .map-card-head h3{ font-size:1rem; }
+  .map-card-head span{ color:var(--ink-dim); font-size:0.8rem; }
+  #map{
+    height:280px; border-radius:4px; border:1px solid var(--line);
+    background:var(--stone);
+  }
+  .map-actions{ display:flex; justify-content:flex-end; margin-top:12px; }
+  .center-pin-dot{
+    width:16px; height:16px; border-radius:50%;
+    background:var(--burgundy); border:3px solid #fff;
+    box-shadow:0 0 0 2px var(--burgundy-dp);
+  }
+  .leaflet-popup-content{ font-family:'Source Sans 3', sans-serif; font-size:0.85rem; }
+  .leaflet-popup-content a{ color:var(--burgundy); }
+
   /* ---------- Rosary-bead divider ---------- */
   .beads{
     display:flex; align-items:center; justify-content:center; gap:9px; margin:34px 0 26px;
@@ -133,6 +157,18 @@
   .parish-links{ display:flex; gap:14px; margin-top:14px; font-size:0.88rem; flex-wrap:wrap; }
   .parish-links a{ color:var(--burgundy); text-decoration:none; border-bottom:1px solid transparent; }
   .parish-links a:hover{ border-bottom-color:var(--burgundy); }
+
+  .scrape-area{ margin-top:12px; }
+  .scrape-area .btn-ghost{ font-size:0.82rem; padding:7px 12px; }
+  .scrape-status{ font-size:0.85rem; color:var(--ink-dim); }
+  .scrape-status a{ color:var(--burgundy); }
+  .scrape-result{
+    background:var(--panel); border:1px solid var(--line); border-radius:4px;
+    padding:12px 14px; font-size:0.86rem;
+  }
+  .scrape-label{ color:var(--ink-dim); font-size:0.78rem; margin-bottom:6px; }
+  .scrape-result ul{ margin:0; padding-left:18px; }
+  .scrape-result li{ margin:2px 0; }
 
   footer{
     margin-top:50px; padding-top:20px; border-top:1px solid var(--line);
@@ -181,6 +217,17 @@
         </select>
       </div>
     </div>
+
+    <div class="map-card">
+      <div class="map-card-head">
+        <h3>Or pick a spot on the map</h3>
+        <span>Drag the pin, then search around it</span>
+      </div>
+      <div id="map"></div>
+      <div class="map-actions">
+        <button class="btn-ghost" id="mapSearchBtn" type="button" style="border-color:var(--burgundy);color:var(--burgundy);">Search within 10 miles of this pin</button>
+      </div>
+    </div>
   </section>
 
   <div class="beads" aria-hidden="true">
@@ -202,6 +249,7 @@
 
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 (function(){
 
@@ -217,7 +265,79 @@
   const placeBtn = document.getElementById('placeBtn');
   const placeInput = document.getElementById('placeInput');
   const radiusSelect = document.getElementById('radiusSelect');
+  const mapSearchBtn = document.getElementById('mapSearchBtn');
   let lastQuery = '';
+  let currentChurches = [];
+
+  // ---------------------------------------------------------------
+  // Map: a draggable pin sets the search center independently of the
+  // location/place search above — drag it anywhere, then hit the
+  // button below the map to search around wherever it lands.
+  // ---------------------------------------------------------------
+  const DEFAULT_CENTER = [39.8283, -98.5795]; // roughly the center of the contiguous US
+  const DEFAULT_ZOOM = 4;
+
+  delete L.Icon.Default.prototype._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png'
+  });
+
+  const map = L.map('map').setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
+  }).addTo(map);
+
+  const centerIcon = L.divIcon({
+    className: 'center-pin',
+    html: '<div class="center-pin-dot"></div>',
+    iconSize: [16, 16],
+    iconAnchor: [8, 8]
+  });
+  const centerMarker = L.marker(DEFAULT_CENTER, { draggable: true, icon: centerIcon, autoPan: true }).addTo(map);
+  const radiusCircle = L.circle(DEFAULT_CENTER, {
+    radius: 10 * MILES_TO_METERS, color: '#7A2731', weight:1, fillColor:'#7A2731', fillOpacity:0.08
+  }).addTo(map);
+  const churchLayer = L.layerGroup().addTo(map);
+
+  function updateCircle(latlng){
+    radiusCircle.setLatLng(latlng);
+    radiusCircle.setRadius(Number(radiusSelect.value) * MILES_TO_METERS);
+  }
+
+  function updateMapCenter(lat, lon, radiusMiles){
+    const latlng = L.latLng(lat, lon);
+    centerMarker.setLatLng(latlng);
+    radiusCircle.setLatLng(latlng);
+    radiusCircle.setRadius(radiusMiles * MILES_TO_METERS);
+    map.fitBounds(radiusCircle.getBounds(), { padding: [24, 24] });
+  }
+
+  function renderChurchMarkers(churches){
+    churchLayer.clearLayers();
+    churches.forEach(c => {
+      const website = c.website ? (c.website.startsWith('http') ? c.website : 'https://' + c.website) : null;
+      const popupHtml = `<strong>${escapeHtml(c.name)}</strong><br>${c.distance.toFixed(1)} mi` +
+        (website ? `<br><a href="${website}" target="_blank" rel="noopener">Website</a>` : '');
+      L.marker([c.lat, c.lon]).addTo(churchLayer).bindPopup(popupHtml);
+    });
+  }
+
+  centerMarker.on('dragend', () => updateCircle(centerMarker.getLatLng()));
+  map.on('click', (e) => {
+    centerMarker.setLatLng(e.latlng);
+    updateCircle(e.latlng);
+  });
+  radiusSelect.addEventListener('change', () => {
+    mapSearchBtn.textContent = `Search within ${radiusSelect.value} miles of this pin`;
+    updateCircle(centerMarker.getLatLng());
+  });
+  mapSearchBtn.addEventListener('click', () => {
+    const pos = centerMarker.getLatLng();
+    runSearch(pos.lat, pos.lng, Number(radiusSelect.value));
+  });
 
   function milesBetween(lat1, lon1, lat2, lon2){
     const R = 3958.8; // earth radius in miles
@@ -372,6 +492,8 @@
   // Render results
   // ---------------------------------------------------------------
   function renderResults(churches, radiusMiles){
+    currentChurches = churches;
+    churchLayer.clearLayers();
     if (churches.length === 0){
       const turboUrl = `https://overpass-turbo.eu/?Q=${encodeURIComponent(lastQuery)}&R`;
       setStatus(
@@ -389,7 +511,7 @@
       </div>
     `;
 
-    const cards = churches.map(c => {
+    const cards = churches.map((c, idx) => {
       const distLabel = c.distance < 0.1 ? 'here' : `${c.distance.toFixed(1)} mi`;
       const rows = [];
 
@@ -407,6 +529,10 @@
       if (c.phone) links.push(`<a href="tel:${c.phone.replace(/[^+\d]/g,'')}">${c.phone}</a>`);
       links.push(`<a href="https://www.openstreetmap.org/?mlat=${c.lat}&mlon=${c.lon}#map=17/${c.lat}/${c.lon}" target="_blank" rel="noopener">Map</a>`);
 
+      const scrapeArea = c.website
+        ? `<div class="scrape-area" id="scrape-${idx}"><button class="btn-ghost scrape-btn" data-idx="${idx}" type="button">Look for Mass times on their website</button></div>`
+        : '';
+
       return `
         <div class="parish">
           <div class="parish-head">
@@ -416,11 +542,13 @@
           ${c.address ? `<div class="parish-addr">${c.address}</div>` : ''}
           <dl class="parish-detail">${rows.join('')}</dl>
           <div class="parish-links">${links.join('')}</div>
+          ${scrapeArea}
         </div>
       `;
     }).join('');
 
     output.innerHTML = head + cards;
+    renderChurchMarkers(churches);
   }
 
   // OSM service_times syntax (e.g. "Su 08:00,10:00,12:00; Sa 16:00-16:45") is
@@ -430,9 +558,81 @@
   }
 
   // ---------------------------------------------------------------
+  // Best-effort scrape of a parish's own website for Mass times.
+  // Plain browser fetch() can't read most external sites' HTML —
+  // they don't send the CORS headers that would allow it — so this
+  // routes the request through r.jina.ai, a free public "reader" proxy
+  // that fetches the page server-side and returns its visible text.
+  // This is a heuristic, not a guarantee: it can miss times that are
+  // in an image, a PDF, or a page the reader can't render, and it can
+  // occasionally be unavailable or rate-limited. Always treat what it
+  // finds as a starting point, not a confirmed schedule.
+  // ---------------------------------------------------------------
+  function escapeHtml(str){
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+               .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function extractMassLines(text){
+    const lines = text.split('\n').map(l => l.replace(/\s+/g,' ').trim()).filter(Boolean);
+    const massWord = /\bmass(es)?\b/i;
+    const dayWord = /\b(sun|mon|tue|wed|thu|fri|sat)[a-z]*\b|\bdaily\b|\bweekday(s)?\b|\bvigil\b/i;
+    const timeWord = /\b\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.)\b/i;
+
+    const hits = [];
+    for (let i = 0; i < lines.length; i++){
+      const line = lines[i];
+      if (line.length > 200) continue; // skip paragraphs, not schedule lines
+      const hasMass = massWord.test(line);
+      const hasScheduleShape = dayWord.test(line) && timeWord.test(line);
+      if (hasMass && (timeWord.test(line) || dayWord.test(line))){
+        hits.push(line);
+      } else if (hasScheduleShape){
+        const context = lines.slice(Math.max(0, i - 2), i + 1).join(' ');
+        if (massWord.test(context)) hits.push(line);
+      }
+    }
+    return [...new Set(hits)].slice(0, 8);
+  }
+
+  async function scrapeMassTimes(url){
+    const res = await fetch(`https://r.jina.ai/${url}`);
+    if (!res.ok) throw new Error('reader proxy returned ' + res.status);
+    const text = await res.text();
+    return extractMassLines(text);
+  }
+
+  output.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.scrape-btn');
+    if (!btn) return;
+    const idx = Number(btn.dataset.idx);
+    const church = currentChurches[idx];
+    const container = document.getElementById(`scrape-${idx}`);
+    if (!church || !church.website || !container) return;
+
+    const url = church.website.startsWith('http') ? church.website : 'https://' + church.website;
+    container.innerHTML = `<span class="scrape-status">Checking their website…</span>`;
+    try{
+      const hits = await scrapeMassTimes(url);
+      if (hits.length === 0){
+        container.innerHTML = `<span class="scrape-status muted">Couldn't automatically spot Mass times on their site — <a href="${url}" target="_blank" rel="noopener">check it directly</a>.</span>`;
+      } else {
+        container.innerHTML = `
+          <div class="scrape-result">
+            <div class="scrape-label">Found on their website — unverified, confirm before you go:</div>
+            <ul>${hits.map(h => `<li>${escapeHtml(h)}</li>`).join('')}</ul>
+          </div>`;
+      }
+    }catch(err){
+      container.innerHTML = `<span class="scrape-status muted">Couldn't reach their website automatically — <a href="${url}" target="_blank" rel="noopener">open it directly</a>.</span>`;
+    }
+  });
+
+  // ---------------------------------------------------------------
   // Search flows
   // ---------------------------------------------------------------
   async function runSearch(lat, lon, radiusMiles){
+    updateMapCenter(lat, lon, radiusMiles);
     setLoading();
     try{
       const churches = await findChurches(lat, lon, radiusMiles);
