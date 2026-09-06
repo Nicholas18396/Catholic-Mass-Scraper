@@ -217,6 +217,7 @@
   const placeBtn = document.getElementById('placeBtn');
   const placeInput = document.getElementById('placeInput');
   const radiusSelect = document.getElementById('radiusSelect');
+  let lastQuery = '';
 
   function milesBetween(lat1, lon1, lat2, lon2){
     const R = 3958.8; // earth radius in miles
@@ -293,16 +294,35 @@
   }
 
   // ---------------------------------------------------------------
-  // Query Overpass for Catholic churches within radius.
+  // Query Overpass for places of worship within radius, then decide
+  // which ones are Catholic in plain JavaScript rather than inside
+  // the Overpass query itself. Combining several tag filters with OR
+  // directly in Overpass QL turned out to be unreliable — it was
+  // silently missing real parishes whose tagging didn't line up
+  // exactly — so instead we fetch every place of worship nearby (a
+  // small, radius-bounded set) and filter it ourselves, which lets us
+  // match loosely across whichever tags a given parish happens to have.
   // Uses GET (not POST) — Overpass's main instance now rejects
   // browser POST requests with a CORS error — and falls back to
   // community mirrors if the primary server is unreachable.
   // ---------------------------------------------------------------
+  function isCatholic(tags){
+    const denom = (tags.denomination || '').toLowerCase();
+    const name = (tags.name || '').toLowerCase();
+    const operator = (tags.operator || '').toLowerCase();
+    const network = (tags['diocese'] || tags['brand'] || '').toLowerCase();
+    return denom.includes('catholic')
+      || name.includes('catholic')
+      || operator.includes('catholic')
+      || operator.includes('diocese')
+      || operator.includes('archdiocese')
+      || network.includes('catholic');
+  }
+
   async function findChurches(lat, lon, radiusMiles){
     const meters = Math.round(radiusMiles * MILES_TO_METERS);
-    const denomFilter = `["amenity"="place_of_worship"]["religion"="christian"]["denomination"~"catholic",i]`;
-    const nameFilter = `["amenity"="place_of_worship"]["name"~"catholic",i]`;
-    const query = `[out:json][timeout:25];(node${denomFilter}(around:${meters},${lat},${lon});way${denomFilter}(around:${meters},${lat},${lon});relation${denomFilter}(around:${meters},${lat},${lon});node${nameFilter}(around:${meters},${lat},${lon});way${nameFilter}(around:${meters},${lat},${lon});relation${nameFilter}(around:${meters},${lat},${lon}););out center tags;`;
+    const query = `[out:json][timeout:25];(node["amenity"="place_of_worship"](around:${meters},${lat},${lon});way["amenity"="place_of_worship"](around:${meters},${lat},${lon});relation["amenity"="place_of_worship"](around:${meters},${lat},${lon}););out center tags;`;
+    lastQuery = query;
 
     let data = null;
     let lastErr = null;
@@ -315,6 +335,7 @@
       }catch(e){ lastErr = e; }
     }
     if (!data) throw lastErr || new Error('all overpass mirrors failed');
+    console.log(`[find-a-mass] Overpass returned ${(data.elements||[]).length} places of worship near ${lat},${lon}`);
 
     const byId = new Map();
     (data.elements || []).forEach(el => {
@@ -322,6 +343,7 @@
       const elLat = el.lat ?? (el.center && el.center.lat);
       const elLon = el.lon ?? (el.center && el.center.lon);
       if (elLat == null || elLon == null || !tags.name) return;
+      if (!isCatholic(tags)) return;
       const id = el.type + el.id;
       if (byId.has(id)) return;
 
@@ -351,7 +373,12 @@
   // ---------------------------------------------------------------
   function renderResults(churches, radiusMiles){
     if (churches.length === 0){
-      setStatus('No parishes found', `No Catholic churches turned up within ${radiusMiles} miles in OpenStreetMap's data. Try a wider radius, or the parish may not be mapped yet.`);
+      const turboUrl = `https://overpass-turbo.eu/?Q=${encodeURIComponent(lastQuery)}&R`;
+      setStatus(
+        'No parishes found',
+        `No Catholic churches turned up within ${radiusMiles} miles in OpenStreetMap's data. Try a wider radius, or the parish may not be mapped yet. ` +
+        `You can also <a href="${turboUrl}" target="_blank" rel="noopener">see everything OSM has nearby</a> to check if this is a data gap.`
+      );
       return;
     }
 
