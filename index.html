@@ -241,33 +241,55 @@
   // ---------------------------------------------------------------
   async function geocode(query){
     const q = query.trim();
-    const zipMatch = q.match(/^\d{5}(-\d{4})?$/);
 
+    // Look for a 5-digit ZIP anywhere in the input, so this still catches
+    // it inside a full address ("123 Main St, Charlotte, NC 28202") and
+    // not just when the whole field is nothing but a ZIP.
+    const zipMatch = q.match(/\b(\d{5})(?:-\d{4})?\b/);
     if (zipMatch){
-      const zip5 = q.slice(0,5);
-      const res = await fetch(`https://api.zippopotam.us/us/${zip5}`);
-      if (!res.ok) return null; // unknown ZIP
-      const data = await res.json();
-      const place = data.places && data.places[0];
-      if (!place) return null;
-      return {
-        lat: parseFloat(place.latitude),
-        lon: parseFloat(place.longitude),
-        label: `${place['place name']}, ${place['state abbreviation']}`
-      };
+      const res = await fetch(`https://api.zippopotam.us/us/${zipMatch[1]}`);
+      if (res.ok){
+        const data = await res.json();
+        const place = data.places && data.places[0];
+        if (place){
+          return {
+            lat: parseFloat(place.latitude),
+            lon: parseFloat(place.longitude),
+            label: `${place['place name']}, ${place['state abbreviation']}`
+          };
+        }
+      }
+      // unknown ZIP — fall through and try it as a place name instead
     }
 
-    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&format=json`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('geocode failed');
-    const data = await res.json();
-    const r = data.results && data.results[0];
-    if (!r) return null;
-    return {
-      lat: r.latitude,
-      lon: r.longitude,
-      label: [r.name, r.admin1, r.country].filter(Boolean).join(', ')
-    };
+    // Open-Meteo's geocoder only matches place names — it doesn't parse
+    // "City, ST" strings or full street addresses. Try the raw input
+    // first, then fall back to progressively simpler versions of it
+    // (just the part before the first comma, then that with any leading
+    // house number stripped) until one of them resolves.
+    const candidates = [q];
+    const firstPart = q.split(',')[0].trim();
+    if (firstPart && firstPart !== q) candidates.push(firstPart);
+    const noHouseNumber = firstPart.replace(/^\d+\s+/, '').trim();
+    if (noHouseNumber && noHouseNumber !== firstPart) candidates.push(noHouseNumber);
+
+    for (const candidate of candidates){
+      if (!candidate) continue;
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(candidate)}&count=1&language=en&format=json`;
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const r = data.results && data.results[0];
+      if (r){
+        return {
+          lat: r.latitude,
+          lon: r.longitude,
+          label: [r.name, r.admin1, r.country].filter(Boolean).join(', ')
+        };
+      }
+    }
+
+    return null;
   }
 
   // ---------------------------------------------------------------
@@ -278,7 +300,9 @@
   // ---------------------------------------------------------------
   async function findChurches(lat, lon, radiusMiles){
     const meters = Math.round(radiusMiles * MILES_TO_METERS);
-    const query = `[out:json][timeout:25];(node["amenity"="place_of_worship"]["religion"="christian"]["denomination"~"^(roman_catholic|catholic)$",i](around:${meters},${lat},${lon});way["amenity"="place_of_worship"]["religion"="christian"]["denomination"~"^(roman_catholic|catholic)$",i](around:${meters},${lat},${lon});node["amenity"="place_of_worship"]["religion"="christian"]["name"~"catholic",i](around:${meters},${lat},${lon});way["amenity"="place_of_worship"]["religion"="christian"]["name"~"catholic",i](around:${meters},${lat},${lon}););out center tags;`;
+    const denomFilter = `["amenity"="place_of_worship"]["religion"="christian"]["denomination"~"catholic",i]`;
+    const nameFilter = `["amenity"="place_of_worship"]["name"~"catholic",i]`;
+    const query = `[out:json][timeout:25];(node${denomFilter}(around:${meters},${lat},${lon});way${denomFilter}(around:${meters},${lat},${lon});relation${denomFilter}(around:${meters},${lat},${lon});node${nameFilter}(around:${meters},${lat},${lon});way${nameFilter}(around:${meters},${lat},${lon});relation${nameFilter}(around:${meters},${lat},${lon}););out center tags;`;
 
     let data = null;
     let lastErr = null;
