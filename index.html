@@ -318,9 +318,9 @@
   function renderChurchMarkers(churches){
     churchLayer.clearLayers();
     churches.forEach(c => {
-      const website = c.website ? (c.website.startsWith('http') ? c.website : 'https://' + c.website) : null;
+      const site = websiteInfo(c);
       const popupHtml = `<strong>${escapeHtml(c.name)}</strong><br>${c.distance.toFixed(1)} mi` +
-        (website ? `<br><a href="${website}" target="_blank" rel="noopener">Website</a>` : '');
+        `<br><a href="${site.href}" target="_blank" rel="noopener">${site.label}</a>`;
       L.marker([c.lat, c.lon]).addTo(churchLayer).bindPopup(popupHtml);
     });
   }
@@ -426,6 +426,18 @@
   // browser POST requests with a CORS error — and falls back to
   // community mirrors if the primary server is unreachable.
   // ---------------------------------------------------------------
+  // Always returns something clickable: the parish's real site when OSM
+  // has one, otherwise a Google search for it, so the website link never
+  // just disappears for a parish OSM hasn't tagged with a URL.
+  function websiteInfo(c){
+    if (c.website){
+      const href = c.website.startsWith('http') ? c.website : 'https://' + c.website;
+      return { href, label: 'Parish website', isReal: true };
+    }
+    const q = encodeURIComponent(`${c.name} ${c.address || ''} catholic church`.trim());
+    return { href: `https://www.google.com/search?q=${q}`, label: 'Search for website', isReal: false };
+  }
+
   function isCatholic(tags){
     const denom = (tags.denomination || '').toLowerCase();
     const name = (tags.name || '').toLowerCase();
@@ -476,16 +488,59 @@
         lat: elLat, lon: elLon,
         address,
         phone: tags.phone || tags['contact:phone'] || null,
-        website: tags.website || tags['contact:website'] || null,
+        website: tags.website || tags['contact:website'] || tags.url || tags['contact:url'] || null,
         serviceTimes: tags.service_times || null,
         confession: tags['service_times:confession'] || null,
         distance: milesBetween(lat, lon, elLat, elLon)
       });
     });
 
-    return Array.from(byId.values())
+    return dedupeChurches(Array.from(byId.values()))
       .filter(c => c.distance <= radiusMiles + 0.3)
       .sort((a,b) => a.distance - b.distance);
+  }
+
+  // ---------------------------------------------------------------
+  // The same physical parish is often mapped more than once in OSM —
+  // e.g. a point for the entrance plus a separate way for the building
+  // outline — each with a different id, so the byId dedup above doesn't
+  // catch it. Collapse entries that share a normalized name and sit
+  // within ~0.15 miles of each other, and merge their fields so a
+  // detail present on one (say, a website) survives even if the other
+  // copy was missing it.
+  // ---------------------------------------------------------------
+  function normalizeName(s){
+    return s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+  }
+
+  function richness(c){
+    return [c.address, c.phone, c.website, c.serviceTimes, c.confession].filter(Boolean).length;
+  }
+
+  function mergeChurchInfo(a, b){
+    const primary = richness(a) >= richness(b) ? a : b;
+    const secondary = primary === a ? b : a;
+    return {
+      name: primary.name,
+      lat: primary.lat, lon: primary.lon,
+      address: primary.address || secondary.address,
+      phone: primary.phone || secondary.phone,
+      website: primary.website || secondary.website,
+      serviceTimes: primary.serviceTimes || secondary.serviceTimes,
+      confession: primary.confession || secondary.confession,
+      distance: primary.distance
+    };
+  }
+
+  function dedupeChurches(list){
+    const kept = [];
+    for (const c of list){
+      const normName = normalizeName(c.name);
+      const dupIdx = kept.findIndex(k => normalizeName(k.name) === normName && milesBetween(k.lat, k.lon, c.lat, c.lon) < 0.15);
+      if (dupIdx === -1) kept.push(c);
+      else kept[dupIdx] = mergeChurchInfo(kept[dupIdx], c);
+    }
+    return kept;
   }
 
   // ---------------------------------------------------------------
@@ -525,7 +580,8 @@
       `);
 
       const links = [];
-      if (c.website) links.push(`<a href="${c.website.startsWith('http') ? c.website : 'https://' + c.website}" target="_blank" rel="noopener">Parish website</a>`);
+      const site = websiteInfo(c);
+      links.push(`<a href="${site.href}" target="_blank" rel="noopener">${site.label}</a>`);
       if (c.phone) links.push(`<a href="tel:${c.phone.replace(/[^+\d]/g,'')}">${c.phone}</a>`);
       links.push(`<a href="https://www.openstreetmap.org/?mlat=${c.lat}&mlon=${c.lon}#map=17/${c.lat}/${c.lon}" target="_blank" rel="noopener">Map</a>`);
 
