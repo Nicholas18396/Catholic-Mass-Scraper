@@ -408,8 +408,10 @@
 
   const OVERPASS_MIRRORS = [
     'https://overpass-api.de/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
-    'https://overpass.private.coffee/api/interpreter'
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+    'https://overpass.openstreetmap.fr/api/interpreter'
   ];
   const MILES_TO_METERS = 1609.34;
 
@@ -666,10 +668,10 @@
   // good answer wins and the rest are cancelled. This replaces trying the
   // mirrors one after another, which made a slow or failing server cost
   // the full timeout before the next was even tried.
-  const HEDGE_MS = 2500;
-  const ATTEMPT_TIMEOUT_MS = 20000;
+  const HEDGE_MS = 1200;            // start another mirror if no answer after this long
+  const ATTEMPT_TIMEOUT_MS = 12000; // give up on any one mirror after this long
 
-  function fetchOverpass(query){
+  function fetchOverpassOnce(query){
     return new Promise((resolve, reject) => {
       const ctrls = [];
       const timers = [];
@@ -694,7 +696,6 @@
             return res.json();
           })
           .then(json => {
-            // Overloaded servers sometimes answer 200 with an error remark and no data.
             if (!json || !Array.isArray(json.elements)) throw new Error('unexpected response');
             if (!json.elements.length && json.remark && /error|timed out|too many/i.test(json.remark)) throw new Error(json.remark);
             if (done) return;
@@ -702,9 +703,10 @@
             ctrls.forEach((c, j) => { if (j !== i) c.abort(); });
             resolve(json);
           })
-          .catch(() => {
+          .catch(err => {
             clearTimeout(kill);
             if (done) return;
+            console.warn('[find-a-mass] mirror failed:', OVERPASS_MIRRORS[i], err && err.message);
             failures++;
             if (failures >= OVERPASS_MIRRORS.length){ finish(); reject(new Error('all overpass mirrors failed')); return; }
             launch(ctrls.length); // start the next unused mirror right away
@@ -717,13 +719,25 @@
     });
   }
 
+  // Try every mirror; if they all fail, wait a moment and try the whole set
+  // once more (busy servers often recover within a couple of seconds).
+  async function fetchOverpass(query){
+    try{
+      return await fetchOverpassOnce(query);
+    }catch(e){
+      progress.note('Servers are busy — retrying…');
+      await new Promise(r => setTimeout(r, 2000));
+      return await fetchOverpassOnce(query);
+    }
+  }
+
   async function findChurches(lat, lon, radiusMiles){
     const meters = Math.round(radiusMiles * MILES_TO_METERS);
     // Skip unnamed places (we'd drop them anyway) and places explicitly tagged
     // as another religion, which shrinks the download in dense cities. Places
     // with no religion tag are kept, so loosely-tagged parishes still come through.
     const filt = '["amenity"="place_of_worship"]["name"]["religion"!~"^(muslim|jewish|buddhist|hindu|sikh|shinto|taoist|bahai|jain)$"]';
-    const query = `[out:json][timeout:25];(node${filt}(around:${meters},${lat},${lon});way${filt}(around:${meters},${lat},${lon});relation${filt}(around:${meters},${lat},${lon}););out center tags;`;
+    const query = `[out:json][timeout:15];nwr${filt}(around:${meters},${lat},${lon});out center tags qt;`;
     lastQuery = query;
 
     const ck = cacheKey(lat, lon, radiusMiles);
