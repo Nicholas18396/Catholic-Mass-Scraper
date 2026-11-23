@@ -176,6 +176,34 @@
   }
   footer a{ color:var(--ink-dim); }
 
+  /* ---------- Search progress ---------- */
+  .progress-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:22px 20px;
+  }
+  .progress-card .big{ font-family:'Fraunces',serif; font-size:1.15rem; display:block; margin-bottom:14px; }
+  .bar{ height:8px; background:var(--line); border-radius:4px; overflow:hidden; }
+  .fill{
+    height:100%; width:0; border-radius:4px;
+    background:linear-gradient(90deg, var(--burgundy), var(--gold));
+    transition:width 0.25s ease-out;
+  }
+  .steps{ list-style:none; margin:16px 0 0; padding:0; display:grid; gap:9px; }
+  .steps li{ display:flex; align-items:center; gap:10px; font-size:0.92rem; color:var(--ink-dim); }
+  .steps .dot{
+    width:13px; height:13px; flex:none; border-radius:50%; border:2px solid var(--line);
+  }
+  .steps li.active{ color:var(--ink); font-weight:600; }
+  .steps li.active .dot{
+    border-color:var(--burgundy); border-top-color:transparent; animation:spin 0.8s linear infinite;
+  }
+  .steps li.done{ color:var(--ink); }
+  .steps li.done .dot{ background:var(--good); border-color:var(--good); }
+  .elapsed{ margin-top:14px; font-size:0.8rem; color:var(--ink-dim); min-height:1.2em; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce){
+    .steps li.active .dot{ animation:none; border-top-color:var(--burgundy); }
+  }
+
   /* ---------- Tabs ---------- */
   [hidden]{ display:none !important; }
   .tabs{ max-width:640px; margin:0 auto; padding:10px 22px 0; }
@@ -473,12 +501,63 @@
   }
 
   function setStatus(bigText, smallHtml){
+    progress.stop();
     output.innerHTML = `<div class="status"><span class="big">${bigText}</span>${smallHtml || ''}</div>`;
   }
 
-  function setLoading(msg){
-    setStatus(msg || 'Searching…', 'Looking up nearby parishes — this can take a few seconds.');
-  }
+  // ---------------------------------------------------------------
+  // Progress display. The lookup has real stages (locate, query,
+  // filter), and the bar jumps to each stage as it begins. Within a
+  // stage the bar creeps forward but never reaches the next stage's
+  // mark on its own, so it only ever fills when work really finishes.
+  // ---------------------------------------------------------------
+  const progress = (function(){
+    let steps = [], idx = 0, pct = 0, timer = null, startedAt = 0, noteText = '';
+
+    function stop(){ if (timer){ clearInterval(timer); timer = null; } }
+    function floorPct(i){ return (i / steps.length) * 100; }
+    function ceilPct(i){ return ((i + 1) / steps.length) * 100 - 4; }
+
+    function paint(){
+      const fill = document.getElementById('progFill');
+      if (!fill){ stop(); return; } // results replaced the card
+      fill.style.width = pct.toFixed(1) + '%';
+      fill.parentElement.setAttribute('aria-valuenow', String(Math.round(pct)));
+      document.querySelectorAll('.progress-card .steps li').forEach((li, i) => {
+        li.className = i < idx ? 'done' : (i === idx ? 'active' : '');
+      });
+      const secs = Math.floor((Date.now() - startedAt) / 1000);
+      const slow = secs >= 8 ? ' Busy servers can take a little longer.' : '';
+      document.getElementById('progElapsed').textContent =
+        (noteText ? noteText + ' ' : '') + (secs >= 2 ? `${secs}s elapsed.` : '') + slow;
+    }
+
+    function tick(){
+      pct += (ceilPct(idx) - pct) * 0.05;
+      paint();
+    }
+
+    return {
+      begin(title, labels){
+        stop();
+        steps = labels; idx = 0; pct = 2; noteText = ''; startedAt = Date.now();
+        output.innerHTML = `
+          <div class="progress-card" role="status">
+            <span class="big">${title}</span>
+            <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="progFill"></div></div>
+            <ol class="steps">${labels.map(l => `<li><span class="dot"></span><span>${l}</span></li>`).join('')}</ol>
+            <div class="elapsed" id="progElapsed"></div>
+          </div>`;
+        paint();
+        timer = setInterval(tick, 120);
+      },
+      next(){ if (idx < steps.length - 1) this.step(idx + 1); },
+      step(i){ idx = i; pct = Math.max(pct, floorPct(i)); paint(); },
+      note(t){ noteText = t; },
+      finish(){ stop(); idx = steps.length; pct = 100; paint(); },
+      stop
+    };
+  })();
 
   // ---------------------------------------------------------------
   // Geocode: US ZIP codes via Zippopotam, city/place names via
@@ -576,22 +655,86 @@
       || network.includes('catholic');
   }
 
+  // Repeat searches of the same spot/radius are served from memory.
+  const searchCache = new Map();
+  const CACHE_TTL_MS = 10 * 60 * 1000;
+  function cacheKey(lat, lon, r){ return `${lat.toFixed(3)},${lon.toFixed(3)},${r}`; }
+
+  // Ask the primary Overpass server first. If it hasn't answered after a
+  // couple of seconds, also ask the next mirror (and the next after that),
+  // and if one fails outright, move to the next straight away. The first
+  // good answer wins and the rest are cancelled. This replaces trying the
+  // mirrors one after another, which made a slow or failing server cost
+  // the full timeout before the next was even tried.
+  const HEDGE_MS = 2500;
+  const ATTEMPT_TIMEOUT_MS = 20000;
+
+  function fetchOverpass(query){
+    return new Promise((resolve, reject) => {
+      const ctrls = [];
+      const timers = [];
+      let failures = 0, done = false;
+
+      function finish(){
+        done = true;
+        timers.forEach(clearTimeout);
+      }
+
+      function launch(i){
+        if (done || i >= OVERPASS_MIRRORS.length || ctrls[i]) return;
+        if (i > 0) progress.note('Trying a backup server too…');
+        const ctrl = new AbortController();
+        ctrls[i] = ctrl;
+        const kill = setTimeout(() => ctrl.abort(), ATTEMPT_TIMEOUT_MS);
+        timers.push(kill);
+
+        fetch(`${OVERPASS_MIRRORS[i]}?data=${encodeURIComponent(query)}`, { signal: ctrl.signal })
+          .then(res => {
+            if (!res.ok) throw new Error('bad status ' + res.status);
+            return res.json();
+          })
+          .then(json => {
+            // Overloaded servers sometimes answer 200 with an error remark and no data.
+            if (!json || !Array.isArray(json.elements)) throw new Error('unexpected response');
+            if (!json.elements.length && json.remark && /error|timed out|too many/i.test(json.remark)) throw new Error(json.remark);
+            if (done) return;
+            finish();
+            ctrls.forEach((c, j) => { if (j !== i) c.abort(); });
+            resolve(json);
+          })
+          .catch(() => {
+            clearTimeout(kill);
+            if (done) return;
+            failures++;
+            if (failures >= OVERPASS_MIRRORS.length){ finish(); reject(new Error('all overpass mirrors failed')); return; }
+            launch(ctrls.length); // start the next unused mirror right away
+          });
+
+        timers.push(setTimeout(() => launch(i + 1), HEDGE_MS));
+      }
+
+      launch(0);
+    });
+  }
+
   async function findChurches(lat, lon, radiusMiles){
     const meters = Math.round(radiusMiles * MILES_TO_METERS);
-    const query = `[out:json][timeout:25];(node["amenity"="place_of_worship"](around:${meters},${lat},${lon});way["amenity"="place_of_worship"](around:${meters},${lat},${lon});relation["amenity"="place_of_worship"](around:${meters},${lat},${lon}););out center tags;`;
+    // Skip unnamed places (we'd drop them anyway) and places explicitly tagged
+    // as another religion, which shrinks the download in dense cities. Places
+    // with no religion tag are kept, so loosely-tagged parishes still come through.
+    const filt = '["amenity"="place_of_worship"]["name"]["religion"!~"^(muslim|jewish|buddhist|hindu|sikh|shinto|taoist|bahai|jain)$"]';
+    const query = `[out:json][timeout:25];(node${filt}(around:${meters},${lat},${lon});way${filt}(around:${meters},${lat},${lon});relation${filt}(around:${meters},${lat},${lon}););out center tags;`;
     lastQuery = query;
 
-    let data = null;
-    let lastErr = null;
-    for (const mirror of OVERPASS_MIRRORS){
-      try{
-        const res = await fetch(`${mirror}?data=${encodeURIComponent(query)}`);
-        if (!res.ok) throw new Error('bad status ' + res.status);
-        data = await res.json();
-        break;
-      }catch(e){ lastErr = e; }
+    const ck = cacheKey(lat, lon, radiusMiles);
+    const hit = searchCache.get(ck);
+    if (hit && Date.now() - hit.t < CACHE_TTL_MS){
+      progress.next();
+      return hit.churches;
     }
-    if (!data) throw lastErr || new Error('all overpass mirrors failed');
+
+    const data = await fetchOverpass(query);
+    progress.next();
     console.log(`[find-a-mass] Overpass returned ${(data.elements||[]).length} places of worship near ${lat},${lon}`);
 
     const byId = new Map();
@@ -620,9 +763,11 @@
       });
     });
 
-    return dedupeChurches(Array.from(byId.values()))
+    const churches = dedupeChurches(Array.from(byId.values()))
       .filter(c => c.distance <= radiusMiles + 0.3)
       .sort((a,b) => a.distance - b.distance);
+    searchCache.set(ck, { t: Date.now(), churches });
+    return churches;
   }
 
   // ---------------------------------------------------------------
@@ -812,11 +957,16 @@
   // ---------------------------------------------------------------
   // Search flows
   // ---------------------------------------------------------------
-  async function runSearch(lat, lon, radiusMiles){
+  // continueProgress: the caller already started the progress card with a
+  // "locating" step, so this just moves it on instead of starting a new one.
+  async function runSearch(lat, lon, radiusMiles, continueProgress){
     updateMapCenter(lat, lon, radiusMiles);
-    setLoading();
+    if (continueProgress) progress.next();
+    else progress.begin('Searching for parishes', ['Searching nearby places of worship', 'Picking out Catholic parishes']);
     try{
       const churches = await findChurches(lat, lon, radiusMiles);
+      progress.finish();
+      await new Promise(r => setTimeout(r, 180)); // let the bar visibly complete
       renderResults(churches, radiusMiles);
     }catch(e){
       setStatus('Search failed', 'Could not reach the church directory right now. Please try again in a moment.');
@@ -828,24 +978,26 @@
       setStatus('Location unavailable', 'Your browser doesn\'t support geolocation — try searching a place instead.');
       return;
     }
-    setLoading('Getting your location…');
+    progress.begin('Searching for parishes', ['Finding your location', 'Searching nearby places of worship', 'Picking out Catholic parishes']);
     navigator.geolocation.getCurrentPosition(
-      (pos) => runSearch(pos.coords.latitude, pos.coords.longitude, Number(radiusSelect.value)),
-      () => setStatus('Location blocked', 'Allow location access in your browser, or search a place instead.')
+      (pos) => runSearch(pos.coords.latitude, pos.coords.longitude, Number(radiusSelect.value), true),
+      () => setStatus('Location blocked', 'Allow location access in your browser, or search a place instead.'),
+      // A coarse, recently cached fix is plenty for a church search and returns much faster.
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
     );
   });
 
   async function searchPlace(){
     const q = placeInput.value.trim();
     if (!q) return;
-    setLoading('Finding that place…');
+    progress.begin('Searching for parishes', ['Finding that place', 'Searching nearby places of worship', 'Picking out Catholic parishes']);
     try{
       const place = await geocode(q);
       if (!place){
         setStatus('Place not found', `Couldn't find "${q}" — try a more specific city, ZIP, or address.`);
         return;
       }
-      await runSearch(place.lat, place.lon, Number(radiusSelect.value));
+      await runSearch(place.lat, place.lon, Number(radiusSelect.value), true);
     }catch(e){
       setStatus('Search failed', 'Could not look up that place right now. Please try again in a moment.');
     }
