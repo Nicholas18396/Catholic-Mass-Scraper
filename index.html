@@ -176,6 +176,48 @@
   }
   footer a{ color:var(--ink-dim); }
 
+  /* ---------- Tabs ---------- */
+  [hidden]{ display:none !important; }
+  .tabs{ max-width:640px; margin:0 auto; padding:10px 22px 0; }
+  .tablist{ display:flex; gap:6px; border-bottom:1px solid var(--line); }
+  .tab{
+    appearance:none; background:none; border:none; border-bottom:2px solid transparent;
+    margin-bottom:-1px; padding:10px 14px; cursor:pointer;
+    font-family:'Source Sans 3',sans-serif; font-weight:600; font-size:0.95rem; color:var(--ink-dim);
+  }
+  .tab:hover{ color:var(--ink); }
+  .tab[aria-selected="true"]{ color:var(--burgundy); border-bottom-color:var(--burgundy); }
+  .tab:focus-visible{ outline:2px solid var(--burgundy); outline-offset:-2px; }
+
+  /* ---------- Daily readings ---------- */
+  .readings-hero{ padding:20px 0 8px; }
+  .readings-hero h1{ font-size:clamp(1.9rem, 6vw, 2.5rem); line-height:1.12; margin-bottom:10px; }
+  .readings-hero p{ margin:0 0 22px; max-width:46ch; color:var(--ink-dim); font-size:1.02rem; }
+  .date-nav{
+    background:var(--panel); border:1px solid var(--line); border-radius:6px;
+    padding:14px 16px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  }
+  .date-nav .spacer{ flex:1; }
+  .date-nav input[type="date"]{
+    background:#fff; border:1px solid var(--line); color:var(--ink); border-radius:4px;
+    padding:8px 10px; font-family:inherit; font-size:0.9rem;
+  }
+  .date-nav input[type="date"]:focus{ outline:2px solid var(--burgundy); outline-offset:1px; }
+  .reading-day{ margin:26px 0 6px; }
+  .reading-date{ color:var(--gold); font-size:0.85rem; font-weight:600; letter-spacing:0.02em; }
+  .reading-day h2{ font-size:1.45rem; line-height:1.2; margin-top:4px; }
+  .reading-meta{ color:var(--ink-dim); font-size:0.85rem; margin-top:6px; }
+  .reading{ border-top:1px solid var(--line); padding:16px 0; }
+  .reading:first-of-type{ margin-top:14px; }
+  .reading-label{
+    color:var(--ink-dim); font-size:0.78rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:600;
+  }
+  .reading-cite{ font-family:'Fraunces',serif; font-size:1.15rem; margin-top:3px; }
+  .readings-actions{ margin-top:18px; display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  .readings-actions a.btn{ text-decoration:none; display:inline-block; }
+  .readings-note{ color:var(--ink-dim); font-size:0.8rem; margin-top:14px; max-width:60ch; }
+  .readings-note a{ color:var(--burgundy); }
+
   @media (max-width:480px){
     .parish-detail{ grid-template-columns:74px 1fr; }
     .search-row{ flex-direction:column; }
@@ -191,7 +233,16 @@
   <span>Find a Mass</span>
 </div>
 
+<div class="tabs">
+  <div class="tablist" role="tablist" aria-label="Sections">
+    <button class="tab" id="tab-mass" role="tab" aria-selected="true" aria-controls="panel-mass" type="button">Find a Mass</button>
+    <button class="tab" id="tab-readings" role="tab" aria-selected="false" aria-controls="panel-readings" tabindex="-1" type="button">Daily Readings</button>
+  </div>
+</div>
+
 <div class="wrap">
+
+  <div id="panel-mass" role="tabpanel" aria-labelledby="tab-mass">
 
   <section class="hero">
     <h1>Find a Mass near you</h1>
@@ -242,9 +293,34 @@
     </div>
   </div>
 
+  </div><!-- /panel-mass -->
+
+  <div id="panel-readings" role="tabpanel" aria-labelledby="tab-readings" hidden>
+    <section class="readings-hero">
+      <h1>Daily Mass readings</h1>
+      <p>The scripture readings for any day of the Church's year, from the U.S. bishops' lectionary.</p>
+
+      <div class="date-nav">
+        <button class="btn-ghost" id="readPrev" type="button" aria-label="Previous day">&larr; Prev</button>
+        <button class="btn-ghost" id="readToday" type="button">Today</button>
+        <button class="btn-ghost" id="readNext" type="button" aria-label="Next day">Next &rarr;</button>
+        <span class="spacer"></span>
+        <input type="date" id="readDate" aria-label="Choose a date">
+      </div>
+    </section>
+
+    <div class="beads" aria-hidden="true">
+      <span></span><span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span><span></span>
+    </div>
+
+    <div id="readingsOutput" aria-live="polite"></div>
+  </div>
+
   <footer>
     Church data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, community-maintained and not affiliated with any diocese.
     Always confirm times on the parish's own website before traveling, especially around holy days.
+    Daily reading listings are from <a href="https://bible.usccb.org/daily-bible-reading" target="_blank" rel="noopener">USCCB.org</a>.
   </footer>
 
 </div>
@@ -728,6 +804,197 @@
 
   placeBtn.addEventListener('click', searchPlace);
   placeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') searchPlace(); });
+
+  // ---------------------------------------------------------------
+  // Tabs
+  // ---------------------------------------------------------------
+  const tabMass = document.getElementById('tab-mass');
+  const tabReadings = document.getElementById('tab-readings');
+  const panelMass = document.getElementById('panel-mass');
+  const panelReadings = document.getElementById('panel-readings');
+  let readingsStarted = false;
+
+  function showTab(which){
+    const isMass = which === 'mass';
+    tabMass.setAttribute('aria-selected', String(isMass));
+    tabReadings.setAttribute('aria-selected', String(!isMass));
+    tabMass.tabIndex = isMass ? 0 : -1;
+    tabReadings.tabIndex = isMass ? -1 : 0;
+    panelMass.hidden = !isMass;
+    panelReadings.hidden = isMass;
+    if (isMass){
+      // Leaflet mis-sizes itself if it was laid out while hidden.
+      setTimeout(() => map.invalidateSize(), 0);
+    } else if (!readingsStarted){
+      readingsStarted = true;
+      loadReadings();
+    }
+  }
+  tabMass.addEventListener('click', () => showTab('mass'));
+  tabReadings.addEventListener('click', () => showTab('readings'));
+  [tabMass, tabReadings].forEach(t => t.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft'){
+      const next = t === tabMass ? tabReadings : tabMass;
+      next.focus();
+      showTab(next === tabMass ? 'mass' : 'readings');
+    }
+  }));
+
+  // ---------------------------------------------------------------
+  // Daily readings
+  // USCCB has no public API and doesn't send CORS headers, so — like
+  // the parish-website lookup above — the page for each date is read
+  // through the r.jina.ai reader proxy. We only pull out the day's
+  // title and the citation for each reading, then link to USCCB for
+  // the full text (the NABRE lectionary text is copyrighted, so it
+  // isn't copied into this app).
+  // Page URLs look like https://bible.usccb.org/bible/readings/112326.cfm
+  // ---------------------------------------------------------------
+  const readDateInput = document.getElementById('readDate');
+  const readingsOutput = document.getElementById('readingsOutput');
+  const readingsCache = new Map();
+  let readingsDate = new Date();
+  let readingsReqId = 0;
+
+  function pad2(n){ return String(n).padStart(2, '0'); }
+  function dateKey(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+  function usccbUrl(d){
+    return `https://bible.usccb.org/bible/readings/${pad2(d.getMonth()+1)}${pad2(d.getDate())}${pad2(d.getFullYear() % 100)}.cfm`;
+  }
+  function usccbCalendarUrl(d){
+    return `https://bible.usccb.org/readings/calendar/${d.getFullYear()}${pad2(d.getMonth()+1)}`;
+  }
+  function prettyDate(d){
+    return d.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+  }
+
+  const LABEL_RE = /^(reading\s*(?:1|2|3|4|5|6|7|i{1,3}|iv|v)?|first reading|second reading|responsorial psalm|psalm|alleluia|gospel acclamation|lenten gospel acclamation|verse before the gospel|sequence|gospel)\s*(?:[:\-–—]\s*(.*))?$/i;
+  const CITE_RE = /[A-Za-z]{2,}\.?\s*\d+\s*[:,]\s*\d+/;
+  const DAY_RE = /(week|solemnity|feast|memorial|sunday|monday|tuesday|wednesday|thursday|friday|saturday|easter|advent|lent|christmas|ordinary time|octave|vigil)/i;
+
+  function cleanLine(line){
+    return line
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/[#*_>`|]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function parseReadingsPage(text){
+    const rawLines = text.split('\n');
+    const lines = rawLines.map(cleanLine).filter(Boolean);
+
+    // Day title
+    let title = null;
+    const titleLine = rawLines.find(l => /^title:/i.test(l.trim()));
+    if (titleLine){
+      const t = cleanLine(titleLine.replace(/^\s*title:\s*/i, '').split('|')[0]);
+      if (t && !/^(daily (bible )?readings?|usccb|bible)$/i.test(t) && !/not found|404/i.test(t)) title = t;
+    }
+    if (!title){
+      title = lines.slice(0, 40).find(l => l.length < 120 && DAY_RE.test(l) && !CITE_RE.test(l)) || null;
+    }
+
+    const lect = text.match(/Lectionary:?\s*(\d{2,4})/i);
+
+    const readings = [];
+    const seen = new Set();
+    for (let i = 0; i < lines.length && readings.length < 10; i++){
+      const m = lines[i].match(LABEL_RE);
+      if (!m) continue;
+      let cite = (m[2] || '').trim();
+      if (!cite || !CITE_RE.test(cite)){
+        cite = '';
+        for (let j = i + 1; j <= i + 3 && j < lines.length; j++){
+          if (lines[j].length < 90 && CITE_RE.test(lines[j]) && !LABEL_RE.test(lines[j])){ cite = lines[j]; break; }
+        }
+      }
+      if (!cite || !CITE_RE.test(cite)) continue;
+      const label = lines[i].match(LABEL_RE)[1].replace(/\s+/g, ' ');
+      const key = label.toLowerCase() + '|' + cite.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      readings.push({ label: label.replace(/^./, c => c.toUpperCase()), cite });
+    }
+    return { title, lectionary: lect ? lect[1] : null, readings };
+  }
+
+  async function fetchReadings(d){
+    const key = dateKey(d);
+    if (readingsCache.has(key)) return readingsCache.get(key);
+    const res = await fetch(`https://r.jina.ai/${usccbUrl(d)}`);
+    if (!res.ok) throw new Error('reader proxy returned ' + res.status);
+    const parsed = parseReadingsPage(await res.text());
+    if (parsed.readings.length) readingsCache.set(key, parsed);
+    return parsed;
+  }
+
+  function renderReadings(d, data){
+    const url = usccbUrl(d);
+    const note = `<p class="readings-note">Citations from the U.S. lectionary via <a href="https://bible.usccb.org/daily-bible-reading" target="_blank" rel="noopener">USCCB.org</a>. The full scripture text is available there.</p>`;
+    if (!data.readings.length){
+      readingsOutput.innerHTML = `
+        <div class="reading-day">
+          <div class="reading-date">${escapeHtml(prettyDate(d))}</div>
+        </div>
+        <div class="status" style="padding:20px 0;">
+          <span class="big">Couldn't read the listing</span>
+          The readings for this day couldn't be pulled in automatically.
+          <a href="${url}" target="_blank" rel="noopener">Open them on USCCB.org</a>
+          or browse the <a href="${usccbCalendarUrl(d)}" target="_blank" rel="noopener">monthly calendar</a>.
+        </div>`;
+      return;
+    }
+    const meta = data.lectionary ? `<div class="reading-meta">Lectionary ${escapeHtml(data.lectionary)}</div>` : '';
+    const items = data.readings.map(r => `
+      <div class="reading">
+        <div class="reading-label">${escapeHtml(r.label)}</div>
+        <div class="reading-cite">${escapeHtml(r.cite)}</div>
+      </div>`).join('');
+    readingsOutput.innerHTML = `
+      <div class="reading-day">
+        <div class="reading-date">${escapeHtml(prettyDate(d))}</div>
+        ${data.title ? `<h2>${escapeHtml(data.title)}</h2>` : ''}
+        ${meta}
+      </div>
+      ${items}
+      <div class="readings-actions">
+        <a class="btn" href="${url}" target="_blank" rel="noopener">Read the full text</a>
+      </div>
+      ${note}`;
+  }
+
+  async function loadReadings(){
+    const d = new Date(readingsDate.getFullYear(), readingsDate.getMonth(), readingsDate.getDate());
+    readDateInput.value = dateKey(d);
+    const reqId = ++readingsReqId;
+    readingsOutput.innerHTML = `<div class="status"><span class="big">Loading readings…</span>${escapeHtml(prettyDate(d))}</div>`;
+    try{
+      const data = await fetchReadings(d);
+      if (reqId !== readingsReqId) return; // user already moved to another day
+      renderReadings(d, data);
+    }catch(e){
+      if (reqId !== readingsReqId) return;
+      readingsOutput.innerHTML = `
+        <div class="status"><span class="big">Couldn't load readings</span>
+        Please try again in a moment, or
+        <a href="${usccbUrl(d)}" target="_blank" rel="noopener">open them on USCCB.org</a>.</div>`;
+    }
+  }
+
+  function shiftReadings(days){
+    readingsDate = new Date(readingsDate.getFullYear(), readingsDate.getMonth(), readingsDate.getDate() + days);
+    loadReadings();
+  }
+  document.getElementById('readPrev').addEventListener('click', () => shiftReadings(-1));
+  document.getElementById('readNext').addEventListener('click', () => shiftReadings(1));
+  document.getElementById('readToday').addEventListener('click', () => { readingsDate = new Date(); loadReadings(); });
+  readDateInput.addEventListener('change', () => {
+    const [y, m, day] = readDateInput.value.split('-').map(Number);
+    if (!y) return;
+    readingsDate = new Date(y, m - 1, day);
+    loadReadings();
+  });
 
 })();
 </script>
