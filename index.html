@@ -272,6 +272,121 @@
   .tag.past{ background:var(--line); color:var(--ink-dim); }
   .holy.is-past .holy-body h3{ color:var(--ink-dim); }
 
+
+  /* ---------- Tabs: allow 4 tabs on narrow screens ---------- */
+  .tablist{ overflow-x:auto; scrollbar-width:none; }
+  .tablist::-webkit-scrollbar{ display:none; }
+  .tab{ white-space:nowrap; }
+  @media (max-width:480px){ .tab{ padding:10px 10px; font-size:0.9rem; } }
+
+  /* ---------- Prayers ---------- */
+  .rosary-card{
+    position:relative; margin-top:6px; border:1px solid var(--line); border-radius:8px; overflow:hidden;
+    background:
+      radial-gradient(ellipse at 50% 38%, #FBF7EA 0%, var(--panel) 55%, #E9E1CC 100%);
+  }
+  .rosary-card svg{ display:block; width:100%; height:auto; max-height:560px; }
+  .rosary-caption{
+    text-align:center; font-size:0.85rem; color:var(--ink-dim); min-height:1.5em; padding:0 14px 6px;
+  }
+  .rosary-caption strong{ color:var(--burgundy); font-family:'Fraunces',serif; font-weight:500; }
+  .rosary-controls{
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:center;
+    padding:12px 14px 16px; border-top:1px solid var(--line); background:rgba(255,255,255,0.35);
+  }
+  .rosary-controls label{ font-size:0.85rem; color:var(--ink-dim); display:flex; align-items:center; gap:8px; }
+  .rosary-controls select{
+    background:#fff; border:1px solid var(--line); color:var(--ink); border-radius:4px;
+    padding:9px 10px; font-family:inherit; font-size:0.9rem;
+  }
+  .rosary-controls select:focus{ outline:2px solid var(--burgundy); outline-offset:1px; }
+  .rosary-controls .btn{ width:auto; }
+
+  .rs-chain{ fill:none; stroke:var(--gold-soft); stroke-width:1.4; opacity:0.75; }
+  .rs-orbit{ fill:none; stroke:var(--line); stroke-width:1; stroke-dasharray:2 5; }
+  .bead{ cursor:pointer; outline:none; }
+  .bead .b{ transition:fill 0.25s, transform 0.2s; transform-box:fill-box; transform-origin:center; }
+  .bead .b.s{ fill:url(#gGold); stroke:#8A6A22; stroke-width:0.7; }
+  .bead .b.l{ fill:url(#gBurg); stroke:var(--gold); stroke-width:1.2; }
+  .bead:hover .b, .bead:focus-visible .b{ transform:scale(1.45); }
+  .bead:focus-visible .b{ stroke:var(--ink); stroke-width:1.6; }
+  .bead .ring{ fill:none; stroke:var(--burgundy); stroke-width:1.6; opacity:0; transform-box:fill-box; transform-origin:center; }
+  .bead.cur .ring{ opacity:1; animation:pulse 1.4s ease-out infinite; }
+  .bead.cur .b{ transform:scale(1.5); }
+  .bead.done .b.s{ fill:url(#gGood); stroke:#35502F; }
+  .bead.done .b.l{ fill:url(#gGoodL); stroke:#35502F; }
+  .bead .hit{ fill:transparent; }
+  .bead .cx{ fill:url(#gGold); stroke:#8A6A22; stroke-width:0.8; transition:fill 0.25s; }
+  .bead.done .cx{ fill:url(#gGood); stroke:#35502F; }
+  .bead.cur .cx{ stroke:var(--burgundy); stroke-width:1.6; }
+  .bead .medal-face{ fill:url(#gBurg); stroke:var(--gold); stroke-width:1.4; }
+  .bead.done .medal-face{ fill:url(#gGoodL); }
+  @keyframes pulse{ 0%{ transform:scale(1); opacity:0.95; } 100%{ transform:scale(2.6); opacity:0; } }
+  .rs-num{ font-family:'Fraunces',serif; font-style:italic; fill:var(--gold); font-size:15px; text-anchor:middle; dominant-baseline:central; }
+  .rs-title{ font-family:'Fraunces',serif; fill:var(--ink); font-size:19px; text-anchor:middle; }
+  .rs-sub{ font-family:'Source Sans 3',sans-serif; fill:var(--ink-dim); font-size:11px; text-anchor:middle; letter-spacing:0.12em; text-transform:uppercase; }
+  @media (prefers-reduced-motion: reduce){ .bead.cur .ring{ animation:none; opacity:0.9; } }
+
+  .prayer-list{ list-style:none; margin:0; padding:0; display:grid; gap:10px; }
+  .prayer-item{
+    appearance:none; width:100%; text-align:left; cursor:pointer; font-family:inherit; color:inherit;
+    display:grid; grid-template-columns:38px 1fr auto; align-items:center; gap:4px 14px;
+    background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:13px 16px;
+    transition:border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  }
+  .prayer-item:hover{ border-color:var(--gold); transform:translateY(-1px); box-shadow:0 3px 10px rgba(122,39,49,0.08); }
+  .prayer-item:focus-visible{ outline:2px solid var(--burgundy); outline-offset:2px; }
+  .prayer-num{
+    width:34px; height:34px; border-radius:50%; display:grid; place-items:center;
+    border:1px solid var(--gold-soft); color:var(--burgundy); font-family:'Fraunces',serif; font-size:0.95rem;
+    background:#fff;
+  }
+  .prayer-name{ font-family:'Fraunces',serif; font-size:1.08rem; line-height:1.2; }
+  .prayer-when{ display:block; color:var(--ink-dim); font-size:0.82rem; margin-top:2px; }
+  .prayer-go{ color:var(--burgundy); font-weight:600; font-size:0.82rem; white-space:nowrap; }
+  .prayer-item .prayer-go::after{ content:" \203A"; }
+
+  /* Prayer reader (bottom sheet) */
+  .sheet{ position:fixed; inset:0; z-index:1000; display:flex; align-items:flex-end; justify-content:center; }
+  .sheet-back{ position:absolute; inset:0; background:rgba(42,36,29,0.55); animation:fade 0.2s ease-out; }
+  .sheet-panel{
+    position:relative; width:100%; max-width:600px; max-height:90vh; display:flex; flex-direction:column;
+    background:var(--panel); border-radius:14px 14px 0 0; border:1px solid var(--line); border-bottom:none;
+    box-shadow:0 -10px 40px rgba(0,0,0,0.25); animation:slideup 0.28s ease-out;
+  }
+  @media (min-width:700px){
+    .sheet{ align-items:center; }
+    .sheet-panel{ border-radius:14px; border-bottom:1px solid var(--line); max-height:86vh; }
+  }
+  @keyframes fade{ from{ opacity:0; } to{ opacity:1; } }
+  @keyframes slideup{ from{ transform:translateY(30px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
+  .sheet-top{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:14px 18px 0; }
+  .sheet-ctx{ color:var(--gold); font-size:0.78rem; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; }
+  .sheet-x{
+    appearance:none; background:none; border:1px solid var(--line); border-radius:50%; width:32px; height:32px;
+    cursor:pointer; color:var(--ink-dim); font-size:1.1rem; line-height:1; flex:none;
+  }
+  .sheet-x:hover{ color:var(--ink); border-color:var(--gold); }
+  .sheet-progress{ height:3px; background:var(--line); margin:12px 18px 0; border-radius:2px; overflow:hidden; }
+  .sheet-progress i{ display:block; height:100%; width:0; background:linear-gradient(90deg,var(--gold),var(--burgundy)); transition:width 0.3s; }
+  .sheet-body{ padding:16px 22px 8px; overflow-y:auto; flex:1; }
+  .sheet-body h2{ font-size:1.6rem; line-height:1.15; }
+  .sheet-count{ color:var(--burgundy); font-size:0.88rem; font-weight:600; margin-top:4px; min-height:1.2em; }
+  .prayer-text{ margin:16px 0 8px; cursor:pointer; user-select:none; -webkit-user-select:none; }
+  .ln{
+    display:block; font-family:'Fraunces',serif; font-size:1.2rem; line-height:1.7; padding-left:14px;
+    color:var(--ink-dim); opacity:0.5; border-left:2px solid transparent; transition:opacity 0.3s, color 0.3s, border-color 0.3s;
+  }
+  .ln.on{ color:var(--ink); opacity:1; }
+  .ln.cur{ border-left-color:var(--gold); }
+  .sheet-hint{ color:var(--ink-dim); font-size:0.78rem; text-align:center; padding:2px 22px 0; }
+  .sheet-bar{ display:flex; gap:10px; padding:12px 18px 18px; border-top:1px solid var(--line); margin-top:8px; }
+  .sheet-bar .btn{ flex:1; font-size:1rem; padding:14px 18px; }
+  .sheet-bar .btn-ghost{ padding:12px 16px; }
+  .sheet-bar .btn.amen{ background:var(--good); border-color:var(--good); }
+  .sheet-bar .btn.amen:hover{ background:#3B5537; border-color:#3B5537; }
+  @media (prefers-reduced-motion: reduce){ .sheet-panel, .sheet-back{ animation:none; } }
+
   @media (max-width:480px){
     .parish-detail{ grid-template-columns:74px 1fr; }
     .search-row{ flex-direction:column; }
@@ -294,6 +409,7 @@
     <button class="tab" id="tab-mass" role="tab" aria-selected="true" aria-controls="panel-mass" type="button">Find a Mass</button>
     <button class="tab" id="tab-readings" role="tab" aria-selected="false" aria-controls="panel-readings" tabindex="-1" type="button">Daily Readings</button>
     <button class="tab" id="tab-holy" role="tab" aria-selected="false" aria-controls="panel-holy" tabindex="-1" type="button">Holy Days</button>
+    <button class="tab" id="tab-prayers" role="tab" aria-selected="false" aria-controls="panel-prayers" tabindex="-1" type="button">Prayers</button>
   </div>
 </div>
 
@@ -394,6 +510,56 @@
     </div>
 
     <div id="holyOutput"></div>
+  </div>
+
+  <div id="panel-prayers" role="tabpanel" aria-labelledby="tab-prayers" hidden>
+    <section class="readings-hero">
+      <h1>Common Catholic prayers</h1>
+      <p>Tap a bead on the rosary to pray its prayer, or pick any prayer from the list. Pray along one line at a time.</p>
+    </section>
+
+    <div class="rosary-card">
+      <svg id="rosarySvg" viewBox="0 0 400 480" role="group" aria-label="Interactive rosary. Each bead opens a prayer."></svg>
+      <div class="rosary-caption" id="rosaryCaption" aria-live="polite">Tap any bead to pray its prayer.</div>
+      <div class="rosary-controls">
+        <label>Mysteries
+          <select id="mysterySelect" aria-label="Mysteries of the Rosary"></select>
+        </label>
+        <button class="btn" id="rosaryStart" type="button">Pray the full Rosary</button>
+      </div>
+    </div>
+
+    <div class="beads" aria-hidden="true">
+      <span></span><span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span><span></span>
+    </div>
+
+    <div class="results-head">
+      <h2>Most common prayers</h2>
+      <span class="note" id="prayerCount"></span>
+    </div>
+    <ol class="prayer-list" id="prayerList"></ol>
+
+    <div class="sheet" id="prayerSheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+      <div class="sheet-back" id="sheetBack"></div>
+      <div class="sheet-panel">
+        <div class="sheet-top">
+          <span class="sheet-ctx" id="sheetCtx"></span>
+          <button class="sheet-x" id="sheetClose" type="button" aria-label="Close prayer">&times;</button>
+        </div>
+        <div class="sheet-progress"><i id="sheetProg"></i></div>
+        <div class="sheet-body">
+          <h2 id="sheetTitle"></h2>
+          <div class="sheet-count" id="sheetCount"></div>
+          <div class="prayer-text" id="sheetText"></div>
+        </div>
+        <div class="sheet-hint" id="sheetHint">Tap the prayer, press Space, or use the button to pray the next line.</div>
+        <div class="sheet-bar">
+          <button class="btn-ghost" id="sheetBack2" type="button">Back</button>
+          <button class="btn" id="sheetNext" type="button">Pray</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <footer>
@@ -1227,11 +1393,14 @@
   const panelReadings = document.getElementById('panel-readings');
   const tabHoly = document.getElementById('tab-holy');
   const panelHoly = document.getElementById('panel-holy');
-  const tabOrder = ['mass', 'readings', 'holy'];
+  const tabPrayers = document.getElementById('tab-prayers');
+  const panelPrayers = document.getElementById('panel-prayers');
+  const tabOrder = ['mass', 'readings', 'holy', 'prayers'];
   const tabParts = {
     mass: [tabMass, panelMass],
     readings: [tabReadings, panelReadings],
-    holy: [tabHoly, panelHoly]
+    holy: [tabHoly, panelHoly],
+    prayers: [tabPrayers, panelPrayers]
   };
   let readingsStarted = false;
   let holyStarted = false;
@@ -1531,6 +1700,428 @@
   document.getElementById('holyPrev').addEventListener('click', () => { holyYear -= 1; renderHolyDays(); });
   document.getElementById('holyNext').addEventListener('click', () => { holyYear += 1; renderHolyDays(); });
   document.getElementById('holyThisYear').addEventListener('click', () => { holyYear = new Date().getFullYear(); renderHolyDays(); });
+
+  // ---------------------------------------------------------------
+  // Prayers
+  // Traditional texts. Lines are separated by "|" so the reader can
+  // light them up one at a time as the person prays along.
+  // ---------------------------------------------------------------
+  const PRAYERS = {
+    sign:{ name:'Sign of the Cross', when:'Begins and ends nearly every prayer',
+      text:'In the name of the Father,|and of the Son,|and of the Holy Spirit.|Amen.' },
+    our:{ name:'Our Father', when:'The prayer Jesus taught his disciples',
+      text:'Our Father, who art in heaven,|hallowed be thy name;|thy kingdom come,|thy will be done|on earth as it is in heaven.|Give us this day our daily bread,|and forgive us our trespasses|as we forgive those who trespass against us;|and lead us not into temptation,|but deliver us from evil.|Amen.' },
+    hail:{ name:'Hail Mary', when:'Prayed ten times in each decade of the Rosary',
+      text:'Hail Mary, full of grace,|the Lord is with thee.|Blessed art thou among women,|and blessed is the fruit of thy womb, Jesus.|Holy Mary, Mother of God,|pray for us sinners,|now and at the hour of our death.|Amen.' },
+    glory:{ name:'Glory Be', when:'A short hymn of praise to the Trinity',
+      text:'Glory be to the Father,|and to the Son,|and to the Holy Spirit,|as it was in the beginning,|is now, and ever shall be,|world without end.|Amen.' },
+    creed:{ name:'Apostles\u2019 Creed', when:'A summary of the faith, prayed at the start of the Rosary',
+      text:'I believe in God, the Father almighty,|Creator of heaven and earth,|and in Jesus Christ, his only Son, our Lord,|who was conceived by the Holy Spirit,|born of the Virgin Mary,|suffered under Pontius Pilate,|was crucified, died and was buried;|he descended into hell;|on the third day he rose again from the dead;|he ascended into heaven,|and is seated at the right hand of God the Father almighty;|from there he will come to judge the living and the dead.|I believe in the Holy Spirit,|the holy catholic Church,|the communion of saints,|the forgiveness of sins,|the resurrection of the body,|and life everlasting.|Amen.' },
+    contrition:{ name:'Act of Contrition', when:'Prayed in repentance, and during Confession',
+      text:'O my God, I am heartily sorry for having offended Thee,|and I detest all my sins because of Thy just punishments,|but most of all because they offend Thee, my God,|who art all good and deserving of all my love.|I firmly resolve, with the help of Thy grace,|to sin no more and to avoid the near occasion of sin.|Amen.' },
+    queen:{ name:'Hail, Holy Queen', when:'Closes the Rosary (the Salve Regina)',
+      text:'Hail, Holy Queen, Mother of Mercy,|our life, our sweetness and our hope.|To thee do we cry, poor banished children of Eve;|to thee do we send up our sighs,|mourning and weeping in this valley of tears.|Turn then, most gracious advocate,|thine eyes of mercy toward us,|and after this our exile,|show unto us the blessed fruit of thy womb, Jesus.|O clement, O loving, O sweet Virgin Mary.|V. Pray for us, O holy Mother of God.|R. That we may be made worthy of the promises of Christ.|Amen.' },
+    memorare:{ name:'Memorare', when:'A prayer of trust in Mary\u2019s intercession',
+      text:'Remember, O most gracious Virgin Mary,|that never was it known|that anyone who fled to thy protection,|implored thy help, or sought thy intercession,|was left unaided.|Inspired by this confidence,|I fly unto thee, O Virgin of virgins, my Mother;|to thee do I come, before thee I stand, sinful and sorrowful.|O Mother of the Word Incarnate,|despise not my petitions,|but in thy mercy hear and answer me.|Amen.' },
+    fatima:{ name:'Fatima Prayer', when:'Added after the Glory Be in each Rosary decade',
+      text:'O my Jesus, forgive us our sins,|save us from the fires of hell,|lead all souls to heaven,|especially those in most need of thy mercy.|Amen.' },
+    spirit:{ name:'Come, Holy Spirit', when:'Invoking the Holy Spirit before study, work or decisions',
+      text:'Come, Holy Spirit, fill the hearts of your faithful|and kindle in them the fire of your love.|V. Send forth your Spirit and they shall be created.|R. And you will renew the face of the earth.|Let us pray.|O God, who by the light of the Holy Spirit|did instruct the hearts of the faithful,|grant that by the same Holy Spirit|we may be truly wise and ever enjoy his consolations.|Through Christ our Lord.|Amen.' },
+    angel:{ name:'Guardian Angel Prayer', when:'A child\u2019s first prayer, and a daily one for all',
+      text:'Angel of God, my guardian dear,|to whom God\u2019s love commits me here,|ever this day be at my side,|to light and guard, to rule and guide.|Amen.' },
+    michael:{ name:'Prayer to St. Michael', when:'Asking protection against evil',
+      text:'Saint Michael the Archangel,|defend us in battle.|Be our protection against the wickedness and snares of the devil.|May God rebuke him, we humbly pray;|and do thou, O Prince of the heavenly hosts,|by the power of God,|cast into hell Satan,|and all the evil spirits|who prowl about the world|seeking the ruin of souls.|Amen.' },
+    before:{ name:'Grace Before Meals', when:'Blessing the food before eating',
+      text:'Bless us, O Lord, and these thy gifts,|which we are about to receive|from thy bounty,|through Christ our Lord.|Amen.' },
+    after:{ name:'Grace After Meals', when:'Giving thanks after eating',
+      text:'We give thee thanks, almighty God,|for all thy benefits,|who livest and reignest|world without end.|Amen.' },
+    rest:{ name:'Eternal Rest', when:'Praying for the souls of the faithful departed',
+      text:'Eternal rest grant unto them, O Lord,|and let perpetual light shine upon them.|May they rest in peace.|Amen.|May their souls and the souls of all the faithful departed,|through the mercy of God,|rest in peace.|Amen.' }
+  };
+  const PRAYER_ORDER = ['sign','our','hail','glory','creed','contrition','queen','memorare','fatima',
+    'spirit','angel','michael','before','after','rest'];
+  Object.values(PRAYERS).forEach(p => { p.lines = p.text.split('|'); });
+
+  const MYSTERIES = {
+    joyful:{ label:'Joyful', days:[1,6], names:['The Annunciation','The Visitation','The Nativity','The Presentation','The Finding in the Temple'] },
+    luminous:{ label:'Luminous', days:[4], names:['The Baptism of Jesus','The Wedding at Cana','The Proclamation of the Kingdom','The Transfiguration','The Institution of the Eucharist'] },
+    sorrowful:{ label:'Sorrowful', days:[2,5], names:['The Agony in the Garden','The Scourging at the Pillar','The Crowning with Thorns','The Carrying of the Cross','The Crucifixion'] },
+    glorious:{ label:'Glorious', days:[3,0], names:['The Resurrection','The Ascension','The Descent of the Holy Spirit','The Assumption of Mary','The Coronation of Mary'] }
+  };
+  const WEEKDAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+  // ----- Rosary geometry -----
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const RS = { cx:200, cy:160, r:140 };
+  const LOOP_N = 55;          // 5 large + 50 small beads
+  const isLargeIdx = (i) => i % 11 === 0;
+
+  const rosarySvg = document.getElementById('rosarySvg');
+  const rosaryCaption = document.getElementById('rosaryCaption');
+  const mysterySelect = document.getElementById('mysterySelect');
+  const beadEls = {};
+  const beadInfo = {};
+  const DEFAULT_CAPTION = 'Tap any bead to pray its prayer.';
+
+  function svgEl(name, attrs, parent){
+    const e = document.createElementNS(SVGNS, name);
+    Object.keys(attrs || {}).forEach(k => e.setAttribute(k, attrs[k]));
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+
+  function loopPos(i){
+    const a = Math.PI / 2 + (i + 1) * 2 * Math.PI / (LOOP_N + 1);
+    return { x: RS.cx + RS.r * Math.cos(a), y: RS.cy + RS.r * Math.sin(a), a };
+  }
+
+  function buildRosary(){
+    // gradients
+    const defs = svgEl('defs', {}, rosarySvg);
+    const grad = (id, c1, c2, c3) => {
+      const g = svgEl('radialGradient', { id, cx:'35%', cy:'30%', r:'75%' }, defs);
+      svgEl('stop', { offset:'0%', 'stop-color':c1 }, g);
+      svgEl('stop', { offset:'55%', 'stop-color':c2 }, g);
+      svgEl('stop', { offset:'100%', 'stop-color':c3 }, g);
+    };
+    grad('gGold', '#F6E3A6', '#C9AD6C', '#8A6A22');
+    grad('gBurg', '#B8505C', '#7A2731', '#4A141B');
+    grad('gGood', '#B9D3B2', '#6F9468', '#35502F');
+    grad('gGoodL', '#8FB287', '#4C6B47', '#263C23');
+    const halo = svgEl('radialGradient', { id:'gHalo', cx:'50%', cy:'50%', r:'50%' }, defs);
+    svgEl('stop', { offset:'0%', 'stop-color':'#C9AD6C', 'stop-opacity':'0.22' }, halo);
+    svgEl('stop', { offset:'100%', 'stop-color':'#C9AD6C', 'stop-opacity':'0' }, halo);
+
+    // backdrop: halo + orbit rings + radiating ticks
+    svgEl('circle', { cx:RS.cx, cy:RS.cy, r:RS.r + 40, fill:'url(#gHalo)' }, rosarySvg);
+    svgEl('circle', { cx:RS.cx, cy:RS.cy, r:RS.r - 38, class:'rs-orbit' }, rosarySvg);
+    svgEl('circle', { cx:RS.cx, cy:RS.cy, r:RS.r + 24, class:'rs-orbit' }, rosarySvg);
+
+    // chains
+    svgEl('circle', { cx:RS.cx, cy:RS.cy, r:RS.r, class:'rs-chain' }, rosarySvg);
+    const medalY = RS.cy + RS.r;
+    svgEl('line', { x1:RS.cx, y1:medalY, x2:RS.cx, y2:428, class:'rs-chain' }, rosarySvg);
+
+    // centre title
+    const mt = svgEl('text', { x:RS.cx, y:RS.cy - 8, class:'rs-title', id:'rsTitle' }, rosarySvg);
+    mt.textContent = 'The Holy Rosary';
+    const ms = svgEl('text', { x:RS.cx, y:RS.cy + 14, class:'rs-sub', id:'rsSub' }, rosarySvg);
+    ms.textContent = '';
+
+    // decade numerals
+    ['I','II','III','IV','V'].forEach((n, d) => {
+      const mid = loopPos(11 * d + 6);
+      const nx = RS.cx + (RS.r - 28) * Math.cos(mid.a);
+      const ny = RS.cy + (RS.r - 28) * Math.sin(mid.a);
+      const t = svgEl('text', { x:nx, y:ny, class:'rs-num' }, rosarySvg);
+      t.textContent = n;
+    });
+
+    const addBead = (id, kind, x, y, label, prayerId) => {
+      const g = svgEl('g', { class:'bead', tabindex:'0', role:'button', 'data-bead':id, 'aria-label':label }, rosarySvg);
+      const rad = kind === 'l' ? 7 : 4.6;
+      svgEl('circle', { class:'hit', cx:x, cy:y, r:11 }, g);
+      svgEl('circle', { class:'ring', cx:x, cy:y, r:rad + 1 }, g);
+      svgEl('circle', { class:'b ' + kind, cx:x, cy:y, r:rad }, g);
+      beadEls[id] = g;
+      beadInfo[id] = { label, prayerId };
+    };
+
+    // loop beads
+    for (let i = 0; i < LOOP_N; i++){
+      const p = loopPos(i);
+      const d = Math.floor(i / 11) + 1;
+      if (isLargeIdx(i)){
+        addBead('b' + i, 'l', p.x, p.y, `Decade ${d}: Our Father`, 'our');
+      } else {
+        addBead('b' + i, 's', p.x, p.y, `Decade ${d}: Hail Mary ${i % 11} of 10`, 'hail');
+      }
+    }
+    // pendant: Our Father bead + three Hail Marys
+    addBead('pL', 'l', RS.cx, 394, 'Our Father (opening)', 'our');
+    addBead('p1', 's', RS.cx, 368, 'Opening Hail Mary 1 of 3', 'hail');
+    addBead('p2', 's', RS.cx, 348, 'Opening Hail Mary 2 of 3', 'hail');
+    addBead('p3', 's', RS.cx, 328, 'Opening Hail Mary 3 of 3', 'hail');
+
+    // medal
+    const mg = svgEl('g', { class:'bead', tabindex:'0', role:'button', 'data-bead':'medal', 'aria-label':'Centerpiece medal: Hail, Holy Queen' }, rosarySvg);
+    svgEl('circle', { class:'hit', cx:RS.cx, cy:medalY, r:16 }, mg);
+    svgEl('circle', { class:'ring', cx:RS.cx, cy:medalY, r:11 }, mg);
+    svgEl('circle', { class:'b medal-face', cx:RS.cx, cy:medalY, r:11 }, mg);
+    svgEl('path', { d:`M${RS.cx} ${medalY - 6}v12M${RS.cx - 4} ${medalY - 2}h8`, stroke:'#F6E3A6', 'stroke-width':'1.6', 'stroke-linecap':'round', fill:'none' }, mg);
+    beadEls.medal = mg;
+    beadInfo.medal = { label:'Centerpiece medal', prayerId:'queen' };
+
+    // crucifix
+    const cg = svgEl('g', { class:'bead', tabindex:'0', role:'button', 'data-bead':'cross', 'aria-label':'Crucifix: Sign of the Cross and Apostles\u2019 Creed' }, rosarySvg);
+    svgEl('rect', { class:'hit', x:RS.cx - 22, y:410, width:44, height:66 }, cg);
+    svgEl('rect', { class:'cx', x:RS.cx - 5, y:416, width:10, height:56, rx:2 }, cg);
+    svgEl('rect', { class:'cx', x:RS.cx - 18, y:428, width:36, height:10, rx:2 }, cg);
+    svgEl('circle', { class:'ring', cx:RS.cx, cy:440, r:26, style:'stroke-width:1.4' }, cg);
+    beadEls.cross = cg;
+    beadInfo.cross = { label:'Crucifix', prayerId:'sign' };
+  }
+
+  // ----- Reader / session -----
+  const sheet = document.getElementById('prayerSheet');
+  const sheetCtx = document.getElementById('sheetCtx');
+  const sheetTitle = document.getElementById('sheetTitle');
+  const sheetCount = document.getElementById('sheetCount');
+  const sheetText = document.getElementById('sheetText');
+  const sheetProg = document.getElementById('sheetProg');
+  const sheetNext = document.getElementById('sheetNext');
+  const sheetBack2 = document.getElementById('sheetBack2');
+  const sheetHint = document.getElementById('sheetHint');
+  let session = null;      // { steps:[], i:0, lit:0, rosary:bool }
+  let doneBeads = new Set();
+  let lastFocus = null;
+
+  function setBeadState(){
+    Object.keys(beadEls).forEach(id => {
+      const el = beadEls[id];
+      el.classList.remove('cur', 'done');
+      if (doneBeads.has(id)) el.classList.add('done');
+    });
+    if (session && !sheet.hidden){
+      const step = session.steps[session.i];
+      if (step && step.bead && beadEls[step.bead]) beadEls[step.bead].classList.add('cur');
+    }
+  }
+
+  function renderStep(){
+    const st = session.steps[session.i];
+    const p = PRAYERS[st.p];
+    sheetCtx.textContent = st.ctx || 'Prayer';
+    sheetTitle.textContent = p.name;
+    sheetCount.textContent = st.n ? `${st.n} of ${st.of}` : '';
+    sheetText.innerHTML = p.lines.map((l, idx) =>
+      `<span class="ln" data-i="${idx}">${escapeHtml(l)}</span>`).join('');
+    session.lit = 0;
+    paintLines();
+    sheetBack2.disabled = session.i === 0;
+    sheetBack2.style.visibility = session.steps.length > 1 ? 'visible' : 'hidden';
+    const pct = session.rosary ? (session.i / session.steps.length) * 100 : 0;
+    sheetProg.style.width = (session.rosary ? pct : 0) + '%';
+    setBeadState();
+  }
+
+  function paintLines(){
+    const p = PRAYERS[session.steps[session.i].p];
+    const nodes = sheetText.querySelectorAll('.ln');
+    nodes.forEach((n, idx) => {
+      n.classList.toggle('on', idx < session.lit);
+      n.classList.toggle('cur', idx === session.lit - 1);
+    });
+    const complete = session.lit >= p.lines.length;
+    const last = session.i >= session.steps.length - 1;
+    if (!complete){
+      sheetNext.textContent = session.lit === 0 ? 'Begin praying' : 'Pray';
+      sheetNext.classList.remove('amen');
+      if (!session.rosary){
+        sheetProg.style.width = (session.lit / p.lines.length * 100) + '%';
+      } else {
+        const base = session.i / session.steps.length;
+        const part = (session.lit / p.lines.length) / session.steps.length;
+        sheetProg.style.width = ((base + part) * 100) + '%';
+      }
+    } else {
+      if (last){
+        sheetNext.textContent = session.rosary ? 'Amen \u2014 finish' : 'Amen \u2014 pray again';
+      } else {
+        sheetNext.textContent = 'Next prayer \u2192';
+      }
+      sheetNext.classList.add('amen');
+      if (!session.rosary) sheetProg.style.width = '100%';
+      else sheetProg.style.width = (((session.i + 1) / session.steps.length) * 100) + '%';
+    }
+    const active = sheetText.querySelector('.ln.cur');
+    if (active && active.scrollIntoView) active.scrollIntoView({ block:'nearest', behavior:'smooth' });
+  }
+
+  function advance(){
+    if (!session) return;
+    const p = PRAYERS[session.steps[session.i].p];
+    if (session.lit < p.lines.length){
+      session.lit++;
+      paintLines();
+      return;
+    }
+    const st = session.steps[session.i];
+    const nextStep = session.steps[session.i + 1];
+    if (nextStep){
+      if (!nextStep.bead || nextStep.bead !== st.bead) doneBeads.add(st.bead);
+      session.i++;
+      renderStep();
+    } else if (session.rosary){
+      doneBeads.add(st.bead);
+      closeSheet(true);
+    } else {
+      session.lit = 0;
+      paintLines();   // pray again
+    }
+  }
+
+  function goBack(){
+    if (!session) return;
+    if (session.lit > 0){ session.lit = 0; paintLines(); return; }
+    if (session.i > 0){
+      session.i--;
+      const st = session.steps[session.i];
+      const nx = session.steps[session.i + 1];
+      if (!nx || nx.bead !== st.bead) doneBeads.delete(st.bead);
+      renderStep();
+    }
+  }
+
+  function openSheet(steps, rosary){
+    session = { steps, i:0, lit:0, rosary:!!rosary };
+    if (!rosary) doneBeads = new Set();
+    lastFocus = document.activeElement;
+    sheet.hidden = false;
+    document.body.style.overflow = 'hidden';
+    renderStep();
+    sheetNext.focus();
+  }
+
+  function closeSheet(finished){
+    sheet.hidden = true;
+    document.body.style.overflow = '';
+    const wasRosary = session && session.rosary;
+    session = null;
+    setBeadState();
+    if (finished && wasRosary){
+      rosaryCaption.innerHTML = '<strong>Amen.</strong> May your prayers be heard.';
+    } else {
+      rosaryCaption.textContent = DEFAULT_CAPTION;
+    }
+    if (!wasRosary || !finished) doneBeads = new Set();
+    setBeadState();
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+
+  function rosarySteps(key){
+    const m = MYSTERIES[key];
+    const st = [];
+    const add = (p, bead, ctx, n, of) => st.push({ p, bead, ctx, n, of });
+    add('sign', 'cross', 'Opening');
+    add('creed', 'cross', 'Opening');
+    add('our', 'pL', 'Opening');
+    ['p1','p2','p3'].forEach((b, i) => add('hail', b, 'Opening \u00B7 for faith, hope and charity', i + 1, 3));
+    add('glory', 'p3', 'Opening');
+    for (let d = 0; d < 5; d++){
+      const ctx = `Decade ${d + 1} \u00B7 ${m.names[d]}`;
+      add('our', 'b' + (11 * d), ctx);
+      for (let k = 1; k <= 10; k++) add('hail', 'b' + (11 * d + k), ctx, k, 10);
+      add('glory', 'b' + (11 * d + 10), ctx);
+      add('fatima', 'b' + (11 * d + 10), ctx);
+    }
+    add('queen', 'medal', 'Closing');
+    add('sign', 'cross', 'Closing');
+    return st;
+  }
+
+  function prayOne(prayerId, bead){
+    const ctx = bead && beadInfo[bead] ? beadInfo[bead].label : (PRAYERS[prayerId].when || 'Prayer');
+    openSheet([{ p:prayerId, bead:bead || null, ctx }], false);
+  }
+
+  function beadActivate(id){
+    if (id === 'cross'){
+      openSheet([
+        { p:'sign', bead:'cross', ctx:'Crucifix \u00B7 begin' },
+        { p:'creed', bead:'cross', ctx:'Crucifix \u00B7 the Creed' }
+      ], false);
+      return;
+    }
+    const info = beadInfo[id];
+    if (info) prayOne(info.prayerId, id);
+  }
+
+  function setMysteryLabel(){
+    const key = mysterySelect.value;
+    document.getElementById('rsSub').textContent = MYSTERIES[key].label + ' Mysteries';
+  }
+
+  function buildPrayers(){
+    buildRosary();
+
+    // mysteries select, defaulting to today's set
+    const today = new Date().getDay();
+    Object.keys(MYSTERIES).forEach(k => {
+      const o = document.createElement('option');
+      o.value = k;
+      o.textContent = MYSTERIES[k].label + (MYSTERIES[k].days.includes(today) ? ' (today)' : '');
+      mysterySelect.appendChild(o);
+    });
+    mysterySelect.value = Object.keys(MYSTERIES).find(k => MYSTERIES[k].days.includes(today));
+    mysterySelect.addEventListener('change', setMysteryLabel);
+    setMysteryLabel();
+    document.getElementById('rosaryStart').addEventListener('click', () => {
+      doneBeads = new Set();
+      openSheet(rosarySteps(mysterySelect.value), true);
+    });
+
+    // bead interaction
+    rosarySvg.addEventListener('click', (e) => {
+      const g = e.target.closest('[data-bead]');
+      if (g) beadActivate(g.getAttribute('data-bead'));
+    });
+    rosarySvg.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const g = e.target.closest('[data-bead]');
+      if (!g) return;
+      e.preventDefault();
+      beadActivate(g.getAttribute('data-bead'));
+    });
+    const hover = (e) => {
+      const g = e.target.closest && e.target.closest('[data-bead]');
+      if (!g) return;
+      const id = g.getAttribute('data-bead');
+      const info = beadInfo[id];
+      const name = id === 'cross' ? 'Sign of the Cross & Apostles\u2019 Creed' : PRAYERS[info.prayerId].name;
+      rosaryCaption.innerHTML = `<strong>${escapeHtml(name)}</strong> \u00B7 ${escapeHtml(info.label)}`;
+    };
+    rosarySvg.addEventListener('mouseover', hover);
+    rosarySvg.addEventListener('focusin', hover);
+    rosarySvg.addEventListener('mouseleave', () => { if (!session) rosaryCaption.textContent = DEFAULT_CAPTION; });
+
+    // list
+    document.getElementById('prayerCount').textContent = PRAYER_ORDER.length + ' prayers';
+    document.getElementById('prayerList').innerHTML = PRAYER_ORDER.map((id, i) => `
+      <li><button class="prayer-item" type="button" data-prayer="${id}">
+        <span class="prayer-num">${i + 1}</span>
+        <span><span class="prayer-name">${escapeHtml(PRAYERS[id].name)}</span>
+        <span class="prayer-when">${escapeHtml(PRAYERS[id].when)}</span></span>
+        <span class="prayer-go">Pray</span>
+      </button></li>`).join('');
+    document.getElementById('prayerList').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-prayer]');
+      if (b) prayOne(b.getAttribute('data-prayer'), null);
+    });
+
+    // reader controls
+    sheetNext.addEventListener('click', advance);
+    sheetBack2.addEventListener('click', goBack);
+    sheetText.addEventListener('click', advance);
+    document.getElementById('sheetClose').addEventListener('click', () => closeSheet(false));
+    document.getElementById('sheetBack').addEventListener('click', () => closeSheet(false));
+    document.addEventListener('keydown', (e) => {
+      if (sheet.hidden) return;
+      if (e.key === 'Escape'){ closeSheet(false); }
+      else if (e.key === 'ArrowRight'){ e.preventDefault(); advance(); }
+      else if (e.key === 'ArrowLeft'){ e.preventDefault(); goBack(); }
+      else if (e.key === 'Tab'){
+        // keep focus inside the dialog
+        const f = Array.from(sheet.querySelectorAll('button:not([disabled])'));
+        if (!f.length) return;
+        const first = f[0], last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+      }
+    });
+  }
+  buildPrayers();
+
 
 })();
 </script>
