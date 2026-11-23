@@ -669,7 +669,7 @@
   // mirrors one after another, which made a slow or failing server cost
   // the full timeout before the next was even tried.
   const HEDGE_MS = 1200;            // start another mirror if no answer after this long
-  const ATTEMPT_TIMEOUT_MS = 12000; // give up on any one mirror after this long
+  const ATTEMPT_TIMEOUT_MS = 20000; // give up on any one mirror after this long
 
   function fetchOverpassOnce(query){
     return new Promise((resolve, reject) => {
@@ -737,11 +737,16 @@
 
   async function findChurches(lat, lon, radiusMiles){
     const meters = Math.round(radiusMiles * MILES_TO_METERS);
-    // Skip unnamed places (we'd drop them anyway) and places explicitly tagged
-    // as another religion, which shrinks the download in dense cities. Places
-    // with no religion tag are kept, so loosely-tagged parishes still come through.
-    const filt = '["amenity"="place_of_worship"]["name"]["religion"!~"^(muslim|jewish|buddhist|hindu|sikh|shinto|taoist|bahai|jain)$"]';
-    const query = `[out:json][timeout:25];(node${filt}(around:${meters},${lat},${lon});way${filt}(around:${meters},${lat},${lon});relation${filt}(around:${meters},${lat},${lon}););out center tags;`;
+    // Keep the server-side work as cheap as possible: a plain bounding box
+    // plus positive tag matches (indexed lookups). The slow parts of the old
+    // query were the `around:` radius test on every building outline and the
+    // negative regex on religion, which made busy servers time out with 502/504.
+    // Exact distance and Catholic filtering happen in JavaScript afterwards.
+    const dLat = meters / 111320;
+    const dLon = meters / (111320 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
+    const bbox = [lat - dLat, lon - dLon, lat + dLat, lon + dLon].map(n => n.toFixed(5)).join(',');
+    const base = '[\"amenity\"=\"place_of_worship\"][\"name\"]';
+    const query = `[out:json][timeout:25];(nwr${base}[\"religion\"=\"christian\"](${bbox});nwr${base}[\"denomination\"~\"catholic\",i](${bbox}););out center tags;`;
     lastQuery = query;
 
     const ck = cacheKey(lat, lon, radiusMiles);
