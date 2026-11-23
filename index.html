@@ -218,6 +218,32 @@
   .readings-note{ color:var(--ink-dim); font-size:0.8rem; margin-top:14px; max-width:60ch; }
   .readings-note a{ color:var(--burgundy); }
 
+  /* ---------- Holy days ---------- */
+  .holy{
+    border-top:1px solid var(--line); padding:18px 0; display:grid;
+    grid-template-columns:64px 1fr; gap:4px 16px;
+  }
+  .holy:first-child{ border-top:none; }
+  .holy-date{
+    text-align:center; background:var(--panel); border:1px solid var(--line); border-radius:4px;
+    padding:8px 4px; align-self:start;
+  }
+  .holy-date .m{ display:block; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--burgundy); font-weight:600; }
+  .holy-date .d{ display:block; font-family:'Fraunces',serif; font-size:1.5rem; line-height:1.1; }
+  .holy-date .w{ display:block; font-size:0.7rem; color:var(--ink-dim); }
+  .holy-body h3{ font-size:1.1rem; line-height:1.25; }
+  .holy-body p{ margin:6px 0 0; font-size:0.9rem; color:var(--ink-dim); }
+  .holy-body p.alt{ color:var(--ink); }
+  .holy-body p.warn{ color:var(--burgundy); font-weight:600; }
+  .tag{
+    display:inline-block; margin-left:8px; padding:1px 8px; border-radius:10px; vertical-align:middle;
+    font-family:'Source Sans 3',sans-serif; font-size:0.7rem; font-weight:600; letter-spacing:0.03em;
+  }
+  .tag.next{ background:var(--burgundy); color:#fff; }
+  .tag.today{ background:var(--good); color:#fff; }
+  .tag.past{ background:var(--line); color:var(--ink-dim); }
+  .holy.is-past .holy-body h3{ color:var(--ink-dim); }
+
   @media (max-width:480px){
     .parish-detail{ grid-template-columns:74px 1fr; }
     .search-row{ flex-direction:column; }
@@ -237,6 +263,7 @@
   <div class="tablist" role="tablist" aria-label="Sections">
     <button class="tab" id="tab-mass" role="tab" aria-selected="true" aria-controls="panel-mass" type="button">Find a Mass</button>
     <button class="tab" id="tab-readings" role="tab" aria-selected="false" aria-controls="panel-readings" tabindex="-1" type="button">Daily Readings</button>
+    <button class="tab" id="tab-holy" role="tab" aria-selected="false" aria-controls="panel-holy" tabindex="-1" type="button">Holy Days</button>
   </div>
 </div>
 
@@ -315,6 +342,28 @@
     </div>
 
     <div id="readingsOutput" aria-live="polite"></div>
+  </div>
+
+  <div id="panel-holy" role="tabpanel" aria-labelledby="tab-holy" hidden>
+    <section class="readings-hero">
+      <h1>Holy days of obligation</h1>
+      <p>Days other than Sundays when Catholics in the United States are called to attend Mass. Every Sunday is also a day of obligation.</p>
+
+      <div class="date-nav">
+        <button class="btn-ghost" id="holyPrev" type="button" aria-label="Previous year">&larr; Prev</button>
+        <strong id="holyYearLabel" style="font-family:'Fraunces',serif;font-weight:500;font-size:1.1rem;"></strong>
+        <button class="btn-ghost" id="holyNext" type="button" aria-label="Next year">Next &rarr;</button>
+        <span class="spacer"></span>
+        <button class="btn-ghost" id="holyThisYear" type="button">This year</button>
+      </div>
+    </section>
+
+    <div class="beads" aria-hidden="true">
+      <span></span><span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span><span></span>
+    </div>
+
+    <div id="holyOutput"></div>
   </div>
 
   <footer>
@@ -812,33 +861,46 @@
   const tabReadings = document.getElementById('tab-readings');
   const panelMass = document.getElementById('panel-mass');
   const panelReadings = document.getElementById('panel-readings');
+  const tabHoly = document.getElementById('tab-holy');
+  const panelHoly = document.getElementById('panel-holy');
+  const tabOrder = ['mass', 'readings', 'holy'];
+  const tabParts = {
+    mass: [tabMass, panelMass],
+    readings: [tabReadings, panelReadings],
+    holy: [tabHoly, panelHoly]
+  };
   let readingsStarted = false;
+  let holyStarted = false;
 
   function showTab(which){
-    const isMass = which === 'mass';
-    tabMass.setAttribute('aria-selected', String(isMass));
-    tabReadings.setAttribute('aria-selected', String(!isMass));
-    tabMass.tabIndex = isMass ? 0 : -1;
-    tabReadings.tabIndex = isMass ? -1 : 0;
-    panelMass.hidden = !isMass;
-    panelReadings.hidden = isMass;
-    if (isMass){
+    tabOrder.forEach(k => {
+      const [tab, panel] = tabParts[k];
+      const on = k === which;
+      tab.setAttribute('aria-selected', String(on));
+      tab.tabIndex = on ? 0 : -1;
+      panel.hidden = !on;
+    });
+    if (which === 'mass'){
       // Leaflet mis-sizes itself if it was laid out while hidden.
       setTimeout(() => map.invalidateSize(), 0);
-    } else if (!readingsStarted){
+    } else if (which === 'readings' && !readingsStarted){
       readingsStarted = true;
       loadReadings();
+    } else if (which === 'holy' && !holyStarted){
+      holyStarted = true;
+      renderHolyDays();
     }
   }
-  tabMass.addEventListener('click', () => showTab('mass'));
-  tabReadings.addEventListener('click', () => showTab('readings'));
-  [tabMass, tabReadings].forEach(t => t.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft'){
-      const next = t === tabMass ? tabReadings : tabMass;
-      next.focus();
-      showTab(next === tabMass ? 'mass' : 'readings');
-    }
-  }));
+  tabOrder.forEach((k, i) => {
+    const tab = tabParts[k][0];
+    tab.addEventListener('click', () => showTab(k));
+    tab.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      const nextKey = tabOrder[(i + (e.key === 'ArrowRight' ? 1 : tabOrder.length - 1)) % tabOrder.length];
+      tabParts[nextKey][0].focus();
+      showTab(nextKey);
+    });
+  });
 
   // ---------------------------------------------------------------
   // Daily readings
@@ -995,6 +1057,116 @@
     readingsDate = new Date(y, m - 1, day);
     loadReadings();
   });
+
+  // ---------------------------------------------------------------
+  // Holy days of obligation (United States)
+  // Fixed-date days are listed directly; the Ascension is computed
+  // from the date of Easter (Easter + 39 days is the Thursday,
+  // Easter + 42 days is the Sunday it is transferred to in most
+  // dioceses). When Jan 1, Aug 15 or Nov 1 falls on a Saturday or
+  // Monday, the obligation to attend Mass is lifted that year.
+  // ---------------------------------------------------------------
+  const holyOutput = document.getElementById('holyOutput');
+  const holyYearLabel = document.getElementById('holyYearLabel');
+  let holyYear = new Date().getFullYear();
+
+  function easterDate(y){
+    const a = y % 19, b = Math.floor(y / 100), c = y % 100;
+    const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4), k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * m + 114) / 31);
+    const day = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(y, month - 1, day);
+  }
+  function addDays(d, n){ return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
+  function fmtShort(d){ return d.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' }); }
+
+  function holyDaysFor(y){
+    const easter = easterDate(y);
+    const ascThu = addDays(easter, 39);
+    const ascSun = addDays(easter, 42);
+    return [
+      {
+        date: new Date(y, 0, 1), name: 'Solemnity of Mary, Mother of God', lapses: true,
+        desc: 'Celebrates Mary\u2019s motherhood of Christ on the octave day of Christmas.'
+      },
+      {
+        date: ascThu, endDate: ascSun, name: 'Ascension of the Lord',
+        desc: 'Marks Jesus\u2019s ascension into heaven, forty days after Easter.',
+        alt: `In most U.S. dioceses it is observed on <strong>${escapeHtml(fmtShort(ascSun))}</strong> (the Seventh Sunday of Easter). ` +
+             `The provinces of Boston, Hartford, New York, Newark, Omaha and Philadelphia keep it on Thursday, ${escapeHtml(fmtShort(ascThu))}.`
+      },
+      {
+        date: new Date(y, 7, 15), name: 'Assumption of the Blessed Virgin Mary', lapses: true,
+        desc: 'Celebrates Mary being taken up, body and soul, into heavenly glory.'
+      },
+      {
+        date: new Date(y, 10, 1), name: 'Solemnity of All Saints', lapses: true,
+        desc: 'Honors all the saints, known and unknown.'
+      },
+      {
+        date: new Date(y, 11, 8), name: 'Solemnity of the Immaculate Conception',
+        desc: 'Celebrates Mary being preserved from original sin from the moment of her conception. She is the patroness of the United States under this title.',
+        sundayNote: true
+      },
+      {
+        date: new Date(y, 11, 25), name: 'Solemnity of the Nativity of the Lord (Christmas)',
+        desc: 'Celebrates the birth of Jesus.'
+      }
+    ];
+  }
+
+  function renderHolyDays(){
+    holyYearLabel.textContent = holyYear;
+    const today = new Date();
+    const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const days = holyDaysFor(holyYear);
+    const isPast = (h) => (h.endDate || h.date) < todayMid;
+    const isToday = (h) => h.date.getTime() === todayMid.getTime() || (h.endDate && h.endDate.getTime() === todayMid.getTime());
+    const nextIdx = days.findIndex(h => !isPast(h));
+
+    const cards = days.map((h, idx) => {
+      const dow = h.date.getDay();
+      let tag = '';
+      if (isToday(h)) tag = '<span class="tag today">Today</span>';
+      else if (isPast(h)) tag = '<span class="tag past">Past</span>';
+      else if (idx === nextIdx) tag = '<span class="tag next">Next</span>';
+
+      const extra = [];
+      if (h.alt) extra.push(`<p class="alt">${h.alt}</p>`);
+      if (h.lapses && (dow === 6 || dow === 1)){
+        extra.push(`<p class="warn">Falls on a ${dow === 6 ? 'Saturday' : 'Monday'} in ${holyYear}, so the obligation to attend Mass is lifted this year. Attending is still encouraged.</p>`);
+      }
+      if (h.sundayNote && dow === 0){
+        extra.push(`<p class="alt">Falls on a Sunday in ${holyYear} (during Advent), so the celebration moves to Monday, ${escapeHtml(fmtShort(addDays(h.date, 1)))}. The usual Sunday obligation still applies.</p>`);
+      }
+
+      return `
+        <div class="holy ${isPast(h) ? 'is-past' : ''}">
+          <div class="holy-date">
+            <span class="m">${h.date.toLocaleDateString('en-US', { month:'short' })}</span>
+            <span class="d">${h.date.getDate()}</span>
+            <span class="w">${h.date.toLocaleDateString('en-US', { weekday:'short' })}</span>
+          </div>
+          <div class="holy-body">
+            <h3>${escapeHtml(h.name)}${tag}</h3>
+            <p>${h.desc}</p>
+            ${extra.join('')}
+          </div>
+        </div>`;
+    }).join('');
+
+    holyOutput.innerHTML = cards + `
+      <p class="readings-note">Applies to the United States. Mass on the evening before a holy day also fulfills the obligation. Practices can vary by diocese, so confirm with your parish or diocese, especially for the Ascension.</p>`;
+  }
+
+  document.getElementById('holyPrev').addEventListener('click', () => { holyYear -= 1; renderHolyDays(); });
+  document.getElementById('holyNext').addEventListener('click', () => { holyYear += 1; renderHolyDays(); });
+  document.getElementById('holyThisYear').addEventListener('click', () => { holyYear = new Date().getFullYear(); renderHolyDays(); });
 
 })();
 </script>
