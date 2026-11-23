@@ -675,6 +675,7 @@
     return new Promise((resolve, reject) => {
       const ctrls = [];
       const timers = [];
+      const reasons = [];
       let failures = 0, done = false;
 
       function finish(){
@@ -706,9 +707,12 @@
           .catch(err => {
             clearTimeout(kill);
             if (done) return;
-            console.warn('[find-a-mass] mirror failed:', OVERPASS_MIRRORS[i], err && err.message);
+            const host = OVERPASS_MIRRORS[i].split('/')[2];
+            const why = (err && err.name === 'AbortError') ? 'timed out' : ((err && err.message) || 'network/CORS error');
+            reasons.push(host + ': ' + why);
+            console.warn('[find-a-mass] mirror failed:', host, why);
             failures++;
-            if (failures >= OVERPASS_MIRRORS.length){ finish(); reject(new Error('all overpass mirrors failed')); return; }
+            if (failures >= OVERPASS_MIRRORS.length){ finish(); const e = new Error('all overpass mirrors failed'); e.reasons = reasons; reject(e); return; }
             launch(ctrls.length); // start the next unused mirror right away
           });
 
@@ -737,7 +741,7 @@
     // as another religion, which shrinks the download in dense cities. Places
     // with no religion tag are kept, so loosely-tagged parishes still come through.
     const filt = '["amenity"="place_of_worship"]["name"]["religion"!~"^(muslim|jewish|buddhist|hindu|sikh|shinto|taoist|bahai|jain)$"]';
-    const query = `[out:json][timeout:15];nwr${filt}(around:${meters},${lat},${lon});out center tags qt;`;
+    const query = `[out:json][timeout:25];(node${filt}(around:${meters},${lat},${lon});way${filt}(around:${meters},${lat},${lon});relation${filt}(around:${meters},${lat},${lon}););out center tags;`;
     lastQuery = query;
 
     const ck = cacheKey(lat, lon, radiusMiles);
@@ -983,7 +987,11 @@
       await new Promise(r => setTimeout(r, 180)); // let the bar visibly complete
       renderResults(churches, radiusMiles);
     }catch(e){
-      setStatus('Search failed', 'Could not reach the church directory right now. Please try again in a moment.');
+      console.error('[find-a-mass] search failed', e);
+      const detail = (e && e.reasons && e.reasons.length)
+        ? '<br><small style="opacity:.7">' + e.reasons.map(escapeHtml).join('<br>') + '</small>'
+        : '<br><small style="opacity:.7">' + escapeHtml((e && e.message) || String(e)) + '</small>';
+      setStatus('Search failed', 'Could not reach the church directory right now. Please try again in a moment.' + detail);
     }
   }
 
