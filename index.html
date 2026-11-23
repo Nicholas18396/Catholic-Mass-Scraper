@@ -278,6 +278,8 @@
     .btn{ width:100%; }
   }
 
+.found-times{ margin:0; padding-left:18px; }
+  .found-times li{ margin:0 0 3px; }
 </style>
 </head>
 <body>
@@ -841,6 +843,7 @@
   // ---------------------------------------------------------------
   function renderResults(churches, radiusMiles){
     currentChurches = churches;
+    renderRun++;
     churchLayer.clearLayers();
     if (churches.length === 0){
       const turboUrl = `https://overpass-turbo.eu/?Q=${encodeURIComponent(lastQuery)}&R`;
@@ -865,22 +868,23 @@
 
       rows.push(`
         <dt>Mass</dt>
-        <dd class="${c.serviceTimes ? '' : 'muted'}">${c.serviceTimes ? formatTimes(c.serviceTimes) : 'Not listed here — check the parish website'}</dd>
+        <dd id="mass-${idx}" class="${c.serviceTimes ? '' : 'muted'}">${c.serviceTimes ? formatTimes(c.serviceTimes) : 'Not listed here — check the parish website'}</dd>
       `);
       rows.push(`
         <dt>Confession</dt>
-        <dd class="${c.confession ? '' : 'muted'}">${c.confession ? formatTimes(c.confession) : 'Not listed here — check the parish website'}</dd>
+        <dd id="conf-${idx}" class="${c.confession ? '' : 'muted'}">${c.confession ? formatTimes(c.confession) : 'Not listed here — check the parish website'}</dd>
       `);
 
       const links = [];
       const site = websiteInfo(c);
-      links.push(`<a href="${site.href}" target="_blank" rel="noopener">${site.label}</a>`);
+      links.push(`<a id="site-${idx}" href="${site.href}" target="_blank" rel="noopener">${site.label}</a>`);
       if (c.phone) links.push(`<a href="tel:${c.phone.replace(/[^+\d]/g,'')}">${c.phone}</a>`);
       links.push(`<a href="https://www.openstreetmap.org/?mlat=${c.lat}&mlon=${c.lon}#map=17/${c.lat}/${c.lon}" target="_blank" rel="noopener">Map</a>`);
 
-      const scrapeArea = c.website
-        ? `<div class="scrape-area" id="scrape-${idx}"><button class="btn-ghost scrape-btn" data-idx="${idx}" type="button">Look for Mass times on their website</button></div>`
-        : '';
+      const needsLookup = !(c.serviceTimes && c.confession);
+      const scrapeArea = !needsLookup ? '' : (idx < AUTO_MAX
+        ? `<div class="scrape-area" id="scrape-${idx}"><span class="scrape-status muted">Looking for times online…</span></div>`
+        : `<div class="scrape-area" id="scrape-${idx}"><button class="btn-ghost scrape-btn" data-idx="${idx}" type="button">Look for Mass times online</button></div>`);
 
       return `
         <div class="parish">
@@ -898,6 +902,7 @@
 
     output.innerHTML = head + cards;
     renderChurchMarkers(churches);
+    startAutoLoad(churches);
   }
 
   // OSM service_times syntax (e.g. "Su 08:00,10:00,12:00; Sa 16:00-16:45") is
@@ -907,74 +912,254 @@
   }
 
   // ---------------------------------------------------------------
-  // Best-effort scrape of a parish's own website for Mass times.
-  // Plain browser fetch() can't read most external sites' HTML —
-  // they don't send the CORS headers that would allow it — so this
-  // routes the request through r.jina.ai, a free public "reader" proxy
-  // that fetches the page server-side and returns its visible text.
-  // This is a heuristic, not a guarantee: it can miss times that are
-  // in an image, a PDF, or a page the reader can't render, and it can
-  // occasionally be unavailable or rate-limited. Always treat what it
-  // finds as a starting point, not a confirmed schedule.
+  // Automatic Mass / Confession lookup.
+  // OpenStreetMap rarely has service times, so after the list appears we
+  // look each parish up online, nearest first, and fill the cards in as
+  // answers arrive:
+  //   1. use the parish website from OSM, or find one with a web search
+  //      (and check the page really mentions that parish's name);
+  //   2. read the home page, and if times aren't there, follow up to two
+  //      links that look like "Mass times" / "Schedule" / "Confession";
+  //   3. pull out Mass and Confession lines separately.
+  // Everything goes through r.jina.ai, a free "reader" proxy, because
+  // browsers can't read most other sites directly (CORS). This is a
+  // best-effort heuristic: always confirm with the parish before going.
   // ---------------------------------------------------------------
   function escapeHtml(str){
     return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
                .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
-  function extractMassLines(text){
-    const lines = text.split('\n').map(l => l.replace(/\s+/g,' ').trim()).filter(Boolean);
-    const massWord = /\bmass(es)?\b/i;
-    const dayWord = /\b(sun|mon|tue|wed|thu|fri|sat)[a-z]*\b|\bdaily\b|\bweekday(s)?\b|\bvigil\b/i;
-    const timeWord = /\b\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.)\b/i;
+  const AUTO_MAX = 10;      // parishes looked up automatically (nearest first)
+  const CONCURRENCY = 2;    // the free reader proxy rate-limits, so go gently
+  const TIMES_TTL_MS = 24 * 60 * 60 * 1000;
+  let renderRun = 0;        // bumps on every new result list, so stale lookups stop
 
-    const hits = [];
-    for (let i = 0; i < lines.length; i++){
-      const line = lines[i];
-      if (line.length > 200) continue; // skip paragraphs, not schedule lines
-      const hasMass = massWord.test(line);
-      const hasScheduleShape = dayWord.test(line) && timeWord.test(line);
-      if (hasMass && (timeWord.test(line) || dayWord.test(line))){
-        hits.push(line);
-      } else if (hasScheduleShape){
-        const context = lines.slice(Math.max(0, i - 2), i + 1).join(' ');
-        if (massWord.test(context)) hits.push(line);
+  async function readerFetch(url, ms){
+    for (let attempt = 0; attempt < 2; attempt++){
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), ms || 15000);
+      try{
+        const res = await fetch('https://r.jina.ai/' + url, { signal: ctrl.signal });
+        if (res.status === 429 && attempt === 0){ await new Promise(r => setTimeout(r, 3500)); continue; }
+        if (!res.ok) throw new Error('reader ' + res.status);
+        return await res.text();
+      } finally { clearTimeout(t); }
+    }
+    throw new Error('reader busy');
+  }
+
+  function cleanScheduleLine(l){
+    return l.replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+            .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+            .replace(/[*_`#>|]+/g, ' ')
+            .replace(/^\s*[-•·]\s*/, '')
+            .replace(/\s+/g, ' ').trim();
+  }
+
+  const TIME_RE = /\b\d{1,2}(:\d{2})?\s*([ap]\.?m\b\.?)|\bnoon\b/i;
+  const SCHED_DAY_RE  = /\b(sun|mon|tue|wed|thu|fri|sat)[a-z]*\b|\bdaily\b|\bweekdays?\b|\bholy days?\b/i;
+  const MASS_RE = /\bmass(es)?\b|\bvigil\b/i;
+  const CONF_RE = /\bconfessions?\b|\breconciliation\b|\bpenance\b/i;
+  const STOP_RE = /\b(adoration|rosary|bulletin|contact|events?|news|donate|giving|office hours|baptism|marriage|ministr(y|ies)|school|religious education|faith formation|rcia|choir|youth)\b/i;
+
+  function extractTimes(text){
+    const lines = text.split('\n').map(cleanScheduleLine).filter(Boolean);
+    const mass = [], conf = [];
+    let section = null, left = 0, pendingDay = null;
+
+    for (const raw of lines){
+      if (raw.length > 180) continue; // paragraphs, not schedule lines
+      let line = raw;
+      const hasTime = TIME_RE.test(line), hasDay = SCHED_DAY_RE.test(line);
+      const isConf = CONF_RE.test(line), isMass = MASS_RE.test(line);
+
+      if ((isConf || isMass) && hasTime){            // "Sunday Mass 8:00 AM"
+        (isConf ? conf : mass).push(line);
+        continue;
+      }
+      if ((isConf || isMass) && line.length < 70){    // a heading, times follow
+        section = isConf ? 'conf' : 'mass'; left = 8;
+        pendingDay = hasDay ? line : null;
+        continue;
+      }
+      if (!hasTime && STOP_RE.test(line) && line.length < 60){ section = null; pendingDay = null; continue; }
+      if (section && left > 0){
+        if (hasTime){
+          if (!hasDay && pendingDay) line = pendingDay + ': ' + line;
+          (section === 'conf' ? conf : mass).push(line);
+          pendingDay = null;
+        } else if (hasDay && line.length < 40){
+          pendingDay = line;                          // "Saturday" then "5:00 PM" on the next line
+        }
+        left--;
       }
     }
-    return [...new Set(hits)].slice(0, 8);
+    const uniq = a => [...new Set(a)].slice(0, 8);
+    return { mass: uniq(mass), conf: uniq(conf) };
   }
 
-  async function scrapeMassTimes(url){
-    const res = await fetch(`https://r.jina.ai/${url}`);
-    if (!res.ok) throw new Error('reader proxy returned ' + res.status);
-    const text = await res.text();
-    return extractMassLines(text);
+  function candidateSubpages(text, baseUrl){
+    let base; try{ base = new URL(baseUrl); }catch(e){ return []; }
+    const host = h => h.replace(/^www\./, '');
+    const seen = new Set([base.href]);
+    const out = [];
+    const re = /\[([^\]]{1,80})\]\((https?:\/\/[^)\s]+)(?:\s+"[^"]*")?\)/g;
+    let m;
+    while ((m = re.exec(text))){
+      let u; try{ u = new URL(m[2].replace(/#.*$/, '')); }catch(e){ continue; }
+      if (host(u.hostname) !== host(base.hostname)) continue;
+      if (/\.(pdf|jpe?g|png|gif|docx?)$/i.test(u.pathname)) continue;
+      if (seen.has(u.href)) continue;
+      const score = (/mass|schedule|times|confession|reconcil|worship|liturgy|sacrament/i.test(m[1]) ? 2 : 0)
+                  + (/mass|schedule|times|confession|reconcil|worship|liturgy/i.test(u.pathname) ? 1 : 0);
+      if (score > 0){ seen.add(u.href); out.push({ href: u.href, score }); }
+    }
+    return out.sort((a, b) => b.score - a.score).slice(0, 2).map(o => o.href);
   }
 
-  output.addEventListener('click', async (e) => {
-    const btn = e.target.closest('.scrape-btn');
-    if (!btn) return;
-    const idx = Number(btn.dataset.idx);
-    const church = currentChurches[idx];
-    const container = document.getElementById(`scrape-${idx}`);
-    if (!church || !church.website || !container) return;
+  // Read a parish site (and likely schedule subpages) and extract times.
+  async function scrapeSite(url, firstText){
+    const text = firstText != null ? firstText : await readerFetch(url);
+    const res = extractTimes(text);
+    res.src = (res.mass.length || res.conf.length) ? url : null;
+    if (!res.mass.length || !res.conf.length){
+      for (const sub of candidateSubpages(text, url)){
+        if (res.mass.length && res.conf.length) break;
+        try{
+          const r = extractTimes(await readerFetch(sub));
+          if (!res.mass.length && r.mass.length){ res.mass = r.mass; res.src = res.src || sub; }
+          if (!res.conf.length && r.conf.length){ res.conf = r.conf; res.src = res.src || sub; }
+        }catch(e){ /* skip a subpage that won't load */ }
+      }
+    }
+    return res;
+  }
 
-    const url = church.website.startsWith('http') ? church.website : 'https://' + church.website;
-    container.innerHTML = `<span class="scrape-status">Checking their website…</span>`;
+  // Page must actually mention the parish's distinctive name words.
+  function nameMatches(name, pageText){
+    const stop = new Set(['catholic','church','parish','roman','the','and','saint','our','lady','mission','chapel','community']);
+    const tokens = name.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/)
+      .filter(w => w.length >= 3 && !stop.has(w)).map(w => w.replace(/s$/, ''));
+    if (!tokens.length) return false;
+    const hay = pageText.toLowerCase();
+    return tokens.every(t => hay.includes(t));
+  }
+
+  const BAD_HOSTS = /(facebook|instagram|twitter|x\.com|yelp|mapquest|yellowpages|tripadvisor|wikipedia|wikidata|google|bing\.|duckduckgo|youtube|linkedin|pinterest|masstimes|catholicculture|churchfinder|waze|apple\.com|foursquare|bbb\.org|zillow|nextdoor|usccb|catholic-hierarchy|findagrave|mapcarta|alignable|chamberofcommerce|manta\.com|cylex|yp\.com|superpages|indeed|glassdoor|loopnet|reddit)/i;
+
+  async function findCandidateSites(c){
+    const q = `${c.name} ${c.address || ''} catholic church`.replace(/\s+/g, ' ').trim();
+    const text = await readerFetch('https://html.duckduckgo.com/html/?q=' + encodeURIComponent(q));
+    const found = [];
+    const re = /uddg=([^&)\s"]+)/g;
+    let m;
+    while ((m = re.exec(text))){ try{ found.push(decodeURIComponent(m[1])); }catch(e){} }
+    const direct = /\]\((https?:\/\/[^)\s]+)/g;
+    while ((m = direct.exec(text))) found.push(m[1]);
+
+    const hosts = new Set(), out = [];
+    for (const f of found){
+      let u; try{ u = new URL(f); }catch(e){ continue; }
+      if (BAD_HOSTS.test(u.hostname)) continue;
+      const h = u.hostname.replace(/^www\./, '');
+      if (hosts.has(h)) continue;
+      hosts.add(h); out.push(u.href);
+      if (out.length >= 3) break;
+    }
+    return out;
+  }
+
+  // ---- small result cache (24h) so repeat searches are instant ----
+  function timesKey(c){ return 'fam:t1:' + c.name + '|' + c.lat.toFixed(4) + ',' + c.lon.toFixed(4); }
+  function cacheGet(c){
     try{
-      const hits = await scrapeMassTimes(url);
-      if (hits.length === 0){
-        container.innerHTML = `<span class="scrape-status muted">Couldn't automatically spot Mass times on their site — <a href="${url}" target="_blank" rel="noopener">check it directly</a>.</span>`;
-      } else {
-        container.innerHTML = `
-          <div class="scrape-result">
-            <div class="scrape-label">Found on their website — unverified, confirm before you go:</div>
-            <ul>${hits.map(h => `<li>${escapeHtml(h)}</li>`).join('')}</ul>
-          </div>`;
-      }
-    }catch(err){
-      container.innerHTML = `<span class="scrape-status muted">Couldn't reach their website automatically — <a href="${url}" target="_blank" rel="noopener">open it directly</a>.</span>`;
+      const v = JSON.parse(localStorage.getItem(timesKey(c)) || 'null');
+      if (v && Date.now() - v.t < TIMES_TTL_MS) return v;
+    }catch(e){}
+    return null;
+  }
+  function cachePut(c, v){ try{ localStorage.setItem(timesKey(c), JSON.stringify(Object.assign({ t: Date.now() }, v))); }catch(e){} }
+
+  function listHtml(lines){
+    return '<ul class="found-times">' + lines.map(l => `<li>${escapeHtml(l)}</li>`).join('') + '</ul>';
+  }
+
+  function applyTimes(idx, c, v){
+    const area = document.getElementById('scrape-' + idx);
+    const massEl = document.getElementById('mass-' + idx);
+    const confEl = document.getElementById('conf-' + idx);
+    const siteEl = document.getElementById('site-' + idx);
+    if (!area) return;
+
+    if (massEl && !c.serviceTimes && v.mass && v.mass.length){ massEl.innerHTML = listHtml(v.mass); massEl.classList.remove('muted'); }
+    if (confEl && !c.confession && v.conf && v.conf.length){ confEl.innerHTML = listHtml(v.conf); confEl.classList.remove('muted'); }
+    if (siteEl && v.site && v.discovered){ siteEl.href = v.site; siteEl.textContent = 'Parish website (found by search)'; }
+
+    const siteHref = v.site || (c.website ? (c.website.startsWith('http') ? c.website : 'https://' + c.website) : null);
+    const found = (v.mass && v.mass.length) || (v.conf && v.conf.length);
+    if (found){
+      area.innerHTML = `<span class="scrape-status muted">Auto-detected from <a href="${escapeHtml(v.src || siteHref)}" target="_blank" rel="noopener">their website</a> — unverified, confirm before you go.${v.discovered ? ' Website was found by search, so make sure it\'s the right parish.' : ''}</span>`;
+    } else if (siteHref){
+      area.innerHTML = `<span class="scrape-status muted">Couldn't spot times automatically — <a href="${escapeHtml(siteHref)}" target="_blank" rel="noopener">check their website</a>.</span>`;
+    } else {
+      area.innerHTML = `<span class="scrape-status muted">Couldn't find their website automatically — use the search link above.</span>`;
     }
+  }
+
+  async function loadTimes(idx){
+    const c = currentChurches[idx];
+    const area = document.getElementById('scrape-' + idx);
+    if (!c || !area) return;
+    const myRun = renderRun;
+
+    const cached = cacheGet(c);
+    if (cached){ applyTimes(idx, c, cached); return; }
+
+    area.innerHTML = '<span class="scrape-status">Looking for times online…</span>';
+    try{
+      let v;
+      if (c.website){
+        const site = c.website.startsWith('http') ? c.website : 'https://' + c.website;
+        const r = await scrapeSite(site);
+        v = { mass: r.mass, conf: r.conf, src: r.src, site, discovered: false };
+      } else {
+        v = { mass: [], conf: [], src: null, site: null, discovered: false };
+        const candidates = await findCandidateSites(c);
+        for (const cand of candidates.slice(0, 2)){
+          if (myRun !== renderRun) return;
+          let text;
+          try{ text = await readerFetch(cand); }catch(e){ continue; }
+          if (!nameMatches(c.name, text)) continue;   // wrong church — skip it
+          const r = await scrapeSite(cand, text);
+          v = { mass: r.mass, conf: r.conf, src: r.src, site: cand, discovered: true };
+          break;
+        }
+      }
+      if (myRun !== renderRun) return;
+      cachePut(c, v);
+      applyTimes(idx, c, v);
+    }catch(err){
+      console.warn('[find-a-mass] times lookup failed for', c.name, err && err.message);
+      if (myRun !== renderRun) return;
+      area.innerHTML = `<span class="scrape-status muted">Couldn't load times right now. <button class="btn-ghost scrape-btn" data-idx="${idx}" type="button">Try again</button></span>`;
+    }
+  }
+
+  function startAutoLoad(churches){
+    const myRun = renderRun;
+    const queue = [];
+    churches.forEach((c, i) => { if (i < AUTO_MAX && !(c.serviceTimes && c.confession)) queue.push(i); });
+    let next = 0;
+    async function worker(){
+      while (next < queue.length && myRun === renderRun){ await loadTimes(queue[next++]); }
+    }
+    for (let w = 0; w < CONCURRENCY; w++) worker();
+  }
+
+  output.addEventListener('click', (e) => {
+    const btn = e.target.closest('.scrape-btn');
+    if (btn) loadTimes(Number(btn.dataset.idx));
   });
 
   // ---------------------------------------------------------------
